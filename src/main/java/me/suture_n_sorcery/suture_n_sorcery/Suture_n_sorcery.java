@@ -1,5 +1,9 @@
 package me.suture_n_sorcery.suture_n_sorcery;
 
+import me.suture_n_sorcery.suture_n_sorcery.registries.ItemGroups;
+import me.suture_n_sorcery.suture_n_sorcery.registries.ModBlocks;
+import me.suture_n_sorcery.suture_n_sorcery.registries.ModEffects;
+import me.suture_n_sorcery.suture_n_sorcery.registries.ModItems;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,8 +16,11 @@ public class Suture_n_sorcery implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        LOGGER.info("[S&S] SUTURE & SORCERY HAS BEEN INITIALIZED.");
 
-        LOGGER.info("SUTURE & SORCERY HAS BEEN INITIALIZED.");
-
+        ModItems.registerItems();
+        ModBlocks.registerBlocks();
+        ItemGroups.registerItemGroups();
+        ModEffects.registerEffects();
     }
 }
