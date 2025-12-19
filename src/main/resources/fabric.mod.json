@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "suture_n_sorcery",
+  "version": "${version}",
+  "name": "suture_n_sorcery",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/suture_n_sorcery/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "me.suture_n_sorcery.suture_n_sorcery.client.Suture_n_sorceryDataGenerator"
+    ],
+    "client": [
+      "me.suture_n_sorcery.suture_n_sorcery.client.Suture_n_sorceryClient"
+    ],
+    "main": [
+      "me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery"
+    ]
+  },
+  "mixins": [
+    "suture_n_sorcery.mixins.json",
+    {
+      "config": "suture_n_sorcery.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
