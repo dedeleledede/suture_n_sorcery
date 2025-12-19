@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "front": "suture_n_sorcery:block/condensator_front",
+    "side": "suture_n_sorcery:block/condensator_side",
+    "top": "suture_n_sorcery:block/condensator_top"
+  }
+}

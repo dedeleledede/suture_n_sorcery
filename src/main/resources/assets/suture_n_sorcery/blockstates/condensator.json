@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "suture_n_sorcery:block/condensator" },
+    "facing=east": { "model": "suture_n_sorcery:block/condensator", "y": 90 },
+    "facing=south": { "model": "suture_n_sorcery:block/condensator", "y": 180 },
+    "facing=west": { "model": "suture_n_sorcery:block/condensator", "y": 270 }
+  }
+}
