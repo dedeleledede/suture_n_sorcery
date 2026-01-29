@@ -7,7 +7,7 @@
     "LivingEntityJumpingAccessor",
     "concentrated_blood_swim.EntityConcentratedBloodFluidMixin",
     "concentrated_blood_swim.ItemEntityBloodBuoyancyMixin",
-    "concentrated_blood_swim.LivingEntityBloodVanillaSwimMixin",
+    "concentrated_blood_swim.LivingEntityBloodVanillaSwimMixin"
   ],
   "injectors": {
     "defaultRequire": 1
