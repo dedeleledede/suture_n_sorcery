@@ -1,11 +1,21 @@
 package me.suture_n_sorcery.suture_n_sorcery.render;
 
+import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator.Condensator;
+import me.suture_n_sorcery.suture_n_sorcery.fluids.ConcentratedBlood.ConcentratedBloodFluid;
+import me.suture_n_sorcery.suture_n_sorcery.registries.ModFluids;
+import net.fabricmc.fabric.api.client.render.fluid.v1.FluidRenderHandlerRegistry;
+import net.fabricmc.fabric.api.client.render.fluid.v1.SimpleFluidRenderHandler;
 import net.fabricmc.fabric.api.client.rendering.v1.BlockRenderLayerMap;
 import net.minecraft.client.render.BlockRenderLayer;
+import net.minecraft.client.render.RenderLayer;
+import net.minecraft.util.Identifier;
 
 public class ModRender {
     public static void registerRender() {
+
+        // CONDENSATOR
+
         BlockRenderLayerMap.putBlocks(
                 BlockRenderLayer.CUTOUT,
                 Condensator.CONDENSATOR
@@ -15,5 +25,24 @@ public class ModRender {
                 BlockRenderLayer.CUTOUT_MIPPED,
                 Condensator.CONDENSATOR
         );
+
+        // CONCENTRATED BLOOD
+
+        FluidRenderHandlerRegistry.INSTANCE.register(
+                ConcentratedBloodFluid.CONCENTRATED_BLOOD,
+                ConcentratedBloodFluid.FLOWING_CONCENTRATED_BLOOD,
+                new SimpleFluidRenderHandler(
+                        Identifier.of(Suture_n_sorcery.MOD_ID, "block/concentrated_blood_still"),
+                        Identifier.of(Suture_n_sorcery.MOD_ID, "block/concentrated_blood_flow"),
+                        0x8A0303 // tint (RGB)
+                )
+        );
+
+        BlockRenderLayerMap.putFluids(
+                BlockRenderLayer.SOLID,
+                ConcentratedBloodFluid.CONCENTRATED_BLOOD,
+                ConcentratedBloodFluid.FLOWING_CONCENTRATED_BLOOD
+        );
+
     }
 }
