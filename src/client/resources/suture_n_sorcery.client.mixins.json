@@ -1,9 +1,10 @@
-{
+ {
   "required": true,
   "minVersion": "0.8",
   "package": "me.suture_n_sorcery.suture_n_sorcery.mixin.client",
   "compatibilityLevel": "JAVA_21",
   "client": [
+    "FogRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -1,0 +1,14 @@
+package me.suture_n_sorcery.suture_n_sorcery.tags;
+
+import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
+import net.minecraft.fluid.Fluid;
+import net.minecraft.registry.RegistryKeys;
+import net.minecraft.registry.tag.TagKey;
+import net.minecraft.util.Identifier;
+
+public final class ModFluidTags {
+    public static final TagKey<Fluid> CONCENTRATED_BLOOD_SWIM =
+            TagKey.of(RegistryKeys.FLUID, Identifier.of(Suture_n_sorcery.MOD_ID, "concentrated_blood_swim"));
+
+    private ModFluidTags() {}
+}

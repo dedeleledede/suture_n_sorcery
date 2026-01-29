@@ -4,6 +4,10 @@
   "package": "me.suture_n_sorcery.suture_n_sorcery.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "LivingEntityJumpingAccessor",
+    "concentrated_blood_swim.EntityConcentratedBloodFluidMixin",
+    "concentrated_blood_swim.ItemEntityBloodBuoyancyMixin",
+    "concentrated_blood_swim.LivingEntityBloodVanillaSwimMixin",
   ],
   "injectors": {
     "defaultRequire": 1
