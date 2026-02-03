@@ -45,6 +45,7 @@ public abstract class EntityConcentratedBloodFluidMixin implements BloodFluidDat
         }
     }
 
+
     @Override public boolean sns$isInBlood() { return sns$inBlood; }
     @Override public void sns$setJumpingInput(boolean v) { sns$jumpingInput = v; }
     @Override public boolean sns$isJumpingInput() { return sns$jumpingInput; }
