@@ -4,5 +4,6 @@
   "item.suture_n_sorcery.dirty_gauze": "Dirty Gauze",
   "item.suture_n_sorcery.concentrated_blood_bucket": "Concentrated Blood Bucket",
   "block.suture_n_sorcery.condensator": "Condensator",
-  "effect.suture_n_sorcery.bleeding": "Bleeding"
+  "effect.suture_n_sorcery.bleeding": "Bleeding",
+  "death.attack.suture_n_sorcery.bleeding": "%1$s bled out"
 }

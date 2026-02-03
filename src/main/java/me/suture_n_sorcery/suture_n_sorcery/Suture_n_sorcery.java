@@ -20,5 +20,6 @@ public class Suture_n_sorcery implements ModInitializer {
         ModItems.registerItems();
         ItemGroups.registerItemGroups();
         ModEffects.registerEffects();
+        ModParticles.registerParticles();
     }
 }

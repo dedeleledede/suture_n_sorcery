@@ -1,17 +1,19 @@
-package me.suture_n_sorcery.suture_n_sorcery.mixin;
+package me.suture_n_sorcery.suture_n_sorcery.mixin.bleeding;
 
 import me.suture_n_sorcery.suture_n_sorcery.util.BleedingHolder;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.nbt.NbtCompound;
 import net.minecraft.storage.ReadView;
 import net.minecraft.storage.WriteView;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityBleedDataMixin {
+
+    @Unique
     private static final String BLEED_KEY = "suture_n_sorcery_bleed_stored";
 
     @Inject(method = "writeCustomData", at = @At("TAIL"))
