@@ -11,8 +11,20 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.state.StateManager;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Direction;
+import me.suture_n_sorcery.suture_n_sorcery.registries.ModBlockEntities;
+import net.minecraft.block.BlockEntityProvider;
+import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.block.entity.BlockEntityTicker;
+import net.minecraft.block.entity.BlockEntityType;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.screen.NamedScreenHandlerFactory;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.World;
+import org.jetbrains.annotations.Nullable;
 
-public class Condensator extends HorizontalFacingBlock {
+public class Condensator extends HorizontalFacingBlock implements BlockEntityProvider {
     public static final MapCodec<Condensator> CODEC = Block.createCodec(Condensator::new);
 
     public Condensator(Settings settings) {
@@ -35,6 +47,40 @@ public class Condensator extends HorizontalFacingBlock {
         return this.getDefaultState().with(FACING, ctx.getHorizontalPlayerFacing().getOpposite());
     }
 
+    @Override
+    protected ActionResult onUse(BlockState state, World world, BlockPos pos,
+                                 PlayerEntity player, BlockHitResult hit) {
+        if (world.isClient()) return ActionResult.SUCCESS;
+
+        BlockEntity be = world.getBlockEntity(pos);
+        if (be instanceof NamedScreenHandlerFactory factory) {
+            player.openHandledScreen(factory);
+            return ActionResult.SUCCESS;
+        }
+
+        return ActionResult.PASS;
+    }
+
+    // --- BlockEntityProvider ---
+    @Override
+    public @Nullable BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
+        return new CondensatorBlockEntity(pos, state);
+    }
+
+    @Override
+    public @Nullable <T extends BlockEntity> BlockEntityTicker<T> getTicker(World world, BlockState state, BlockEntityType<T> type) {
+        if (world.isClient()) return null;
+        return validateTicker(type, CondensatorBlockEntity::tick);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <E extends BlockEntity, A extends BlockEntity> @Nullable BlockEntityTicker<A> validateTicker(
+            BlockEntityType<A> givenType, BlockEntityTicker<? super E> ticker) {
+        return ModBlockEntities.CONDENSATOR_BLOCK_ENTITY == givenType ? (BlockEntityTicker<A>) ticker : null;
+    }
+
+
+    //registry
     public static final Identifier CONDENSATOR_ID =
             Identifier.of(Suture_n_sorcery.MOD_ID, "condensator");
 
