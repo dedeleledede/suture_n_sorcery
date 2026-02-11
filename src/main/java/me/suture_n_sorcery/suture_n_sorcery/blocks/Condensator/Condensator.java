@@ -2,9 +2,7 @@ package me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator;
 
 import com.mojang.serialization.MapCodec;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.HorizontalFacingBlock;
+import net.minecraft.block.*;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
@@ -12,7 +10,6 @@ import net.minecraft.state.StateManager;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Direction;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModBlockEntities;
-import net.minecraft.block.BlockEntityProvider;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityTicker;
 import net.minecraft.block.entity.BlockEntityType;
@@ -21,10 +18,12 @@ import net.minecraft.screen.NamedScreenHandlerFactory;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.shape.VoxelShape;
+import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
-public class Condensator extends HorizontalFacingBlock implements BlockEntityProvider {
+public class Condensator extends HorizontalFacingBlock implements BlockEntityProvider, CondensatorVoxel {
     public static final MapCodec<Condensator> CODEC = Block.createCodec(Condensator::new);
 
     public Condensator(Settings settings) {
@@ -79,6 +78,47 @@ public class Condensator extends HorizontalFacingBlock implements BlockEntityPro
         return ModBlockEntities.CONDENSATOR_BLOCK_ENTITY == givenType ? (BlockEntityTicker<A>) ticker : null;
     }
 
+    // block hitbox
+
+    private static final VoxelShape SHAPE = Block.createCuboidShape(0, 0, 0, 16, 14, 16);
+
+    @Override
+    protected VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
+        return SHAPE;
+    }
+
+    @Override
+    protected VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
+        return SHAPE;
+    }
+
+    @Override
+    protected VoxelShape getRaycastShape(BlockState state, BlockView world, BlockPos pos) {
+        return SHAPE;
+    }
+
+    @Override
+    public VoxelShape getCullingShape(BlockState state, BlockView world, BlockPos pos) {
+        return SHAPE;
+
+        // renderizar faces de vizinhos por dentro
+        // return VoxelShapes.empty();
+    }
+
+    @Override
+    public int getOpacity(BlockState state, BlockView world, BlockPos pos) {
+        return 0;
+    }
+
+    @Override
+    public boolean isTransparent(BlockState state, BlockView world, BlockPos pos) {
+        return true;
+    }
+
+    @Override
+    protected float getAmbientOcclusionLightLevel(BlockState state, BlockView world, BlockPos pos) {
+        return 1.0F;
+    }
 
     //registry
     public static final Identifier CONDENSATOR_ID =
