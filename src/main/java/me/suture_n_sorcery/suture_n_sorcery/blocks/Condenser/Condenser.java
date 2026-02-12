@@ -1,4 +1,4 @@
-package me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator;
+package me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser;
 
 import com.mojang.serialization.MapCodec;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
@@ -6,6 +6,7 @@ import net.minecraft.block.*;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
+import net.minecraft.sound.BlockSoundGroup;
 import net.minecraft.state.StateManager;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.Direction;
@@ -23,10 +24,10 @@ import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
-public class Condensator extends HorizontalFacingBlock implements BlockEntityProvider, CondensatorVoxel {
-    public static final MapCodec<Condensator> CODEC = Block.createCodec(Condensator::new);
+public class Condenser extends HorizontalFacingBlock implements BlockEntityProvider, CondenserVoxel {
+    public static final MapCodec<Condenser> CODEC = Block.createCodec(Condenser::new);
 
-    public Condensator(Settings settings) {
+    public Condenser(Settings settings) {
         super(settings);
         this.setDefaultState(this.getDefaultState().with(FACING, Direction.NORTH));
     }
@@ -63,13 +64,13 @@ public class Condensator extends HorizontalFacingBlock implements BlockEntityPro
     // --- BlockEntityProvider ---
     @Override
     public @Nullable BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
-        return new CondensatorBlockEntity(pos, state);
+        return new CondenserBlockEntity(pos, state);
     }
 
     @Override
     public @Nullable <T extends BlockEntity> BlockEntityTicker<T> getTicker(World world, BlockState state, BlockEntityType<T> type) {
         if (world.isClient()) return null;
-        return validateTicker(type, CondensatorBlockEntity::tick);
+        return validateTicker(type, CondenserBlockEntity::tick);
     }
 
     @SuppressWarnings("unchecked")
@@ -128,10 +129,10 @@ public class Condensator extends HorizontalFacingBlock implements BlockEntityPro
             RegistryKey.of(RegistryKeys.BLOCK, CONDENSATOR_ID);
 
     public static final Block CONDENSATOR =
-            new Condensator(Settings.create()
+            new Condenser(Settings.create()
                     .strength(1F)
                     .registryKey(CONDENSATOR_KEY)
                     .requiresTool()
-                    .nonOpaque()
+                    .sounds(BlockSoundGroup.STONE)
             );
 }

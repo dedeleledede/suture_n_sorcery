@@ -1,7 +1,7 @@
 package me.suture_n_sorcery.suture_n_sorcery.client.screens;
 
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
-import me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator.CondensatorScreenHandler;
+import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserScreenHandler;
 import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
@@ -9,9 +9,9 @@ import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
-public class CondensatorScreen extends HandledScreen<CondensatorScreenHandler> {
+public class CondenserScreen extends HandledScreen<CondenserScreenHandler> {
 
-    private static final Identifier GUI = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/gui/condensator.png");
+    private static final Identifier GUI = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/gui/condenser.png");
 
     private static final int TANK_X = 11;
     private static final int TANK_Y = 18;
@@ -33,7 +33,7 @@ public class CondensatorScreen extends HandledScreen<CondensatorScreenHandler> {
     private static final Identifier PROGRESS =
             Identifier.of(Suture_n_sorcery.MOD_ID, "textures/gui/condensate_progress.png");
 
-    public CondensatorScreen(CondensatorScreenHandler handler, PlayerInventory inv, Text title) {
+    public CondenserScreen(CondenserScreenHandler handler, PlayerInventory inv, Text title) {
         super(handler, inv, title);
         this.backgroundWidth = 176;
         this.backgroundHeight = 166;

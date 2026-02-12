@@ -1,8 +1,8 @@
 package me.suture_n_sorcery.suture_n_sorcery.registries;
 
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
-import me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator.Condensator;
-import me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator.CondensatorItem;
+import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserItem;
+import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomItem;
 import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
 import me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze;
 import me.suture_n_sorcery.suture_n_sorcery.items.Gauze;
@@ -21,8 +21,9 @@ public class ItemGroups {
             .entries((displayContext, entries) -> {
                 entries.add(new ItemStack(Gauze.GAUZE));
                 entries.add(new ItemStack(DirtyGauze.DIRTY_GAUZE));
-                entries.add(new ItemStack(CondensatorItem.CONDENSATOR_ITEM));
+                entries.add(new ItemStack(CondenserItem.CONDENSATOR_ITEM));
                 entries.add(new ItemStack(ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET));
+                entries.add(new ItemStack(RitualLoomItem.RITUAL_LOOM_ITEM));
              })
             .build();
 

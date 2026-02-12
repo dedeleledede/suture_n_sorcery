@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "suture_n_sorcery:condensator"
+          "name": "suture_n_sorcery:condenser"
         }
       ],
       "conditions": [

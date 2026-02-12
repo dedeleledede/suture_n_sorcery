@@ -1,7 +1,7 @@
-package me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator;
+package me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser;
 
-import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze;
+import me.suture_n_sorcery.suture_n_sorcery.items.Gauze;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModBlockEntities;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
@@ -19,7 +19,6 @@ import net.minecraft.screen.ScreenHandler;
 import net.minecraft.storage.ReadView;
 import net.minecraft.storage.WriteView;
 import net.minecraft.text.Text;
-import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.DefaultedList;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
@@ -28,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import static me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET;
 
-public class CondensatorBlockEntity extends BlockEntity implements SidedInventory, NamedScreenHandlerFactory {
+public class CondenserBlockEntity extends BlockEntity implements SidedInventory, NamedScreenHandlerFactory {
 
     public static final int TANK_CAPACITY_ML = 5000;
     public static final int BUCKET_AMOUNT_ML = 1000;
@@ -36,17 +35,15 @@ public class CondensatorBlockEntity extends BlockEntity implements SidedInventor
     public static final int ML_PER_DIRTY_GAUZE = 250;
     public static final int MAX_PROGRESS = 200;
 
-    private static final Identifier CLEAN_GAUZE_ID = Identifier.of(Suture_n_sorcery.MOD_ID, "gauze");
-
     private int progress = 0;
     private int tankMl = 0;
 
-    public CondensatorBlockEntity(BlockPos pos, BlockState state) {
+    public CondenserBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.CONDENSATOR_BLOCK_ENTITY, pos, state);
     }
 
     // ticking
-    public static void tick(World world, BlockPos pos, BlockState state, CondensatorBlockEntity be) {
+    public static void tick(World world, BlockPos pos, BlockState state, CondenserBlockEntity be) {
         if (world.isClient()) return;
         be.tryFillBuckets();
 
@@ -72,7 +69,7 @@ public class CondensatorBlockEntity extends BlockEntity implements SidedInventor
         if (in.isEmpty() || !in.isOf(DirtyGauze.DIRTY_GAUZE)) return false;
         if (tankMl + ML_PER_DIRTY_GAUZE > TANK_CAPACITY_ML) return false;
 
-        Item cleanItem = Registries.ITEM.get(CLEAN_GAUZE_ID);
+        Item cleanItem = Registries.ITEM.get(Gauze.GAUZE_ID);
         if (cleanItem == Items.AIR) return false;
 
         ItemStack out = items.get(1);
@@ -82,7 +79,7 @@ public class CondensatorBlockEntity extends BlockEntity implements SidedInventor
     }
 
     private void processOne() {
-        Item cleanItem = Registries.ITEM.get(CLEAN_GAUZE_ID);
+        Item cleanItem = Registries.ITEM.get(Gauze.GAUZE_ID);
         if (cleanItem == Items.AIR) return;
 
         items.get(0).decrement(1);
@@ -126,7 +123,7 @@ public class CondensatorBlockEntity extends BlockEntity implements SidedInventor
 
     @Override
     public Text getDisplayName() {
-        return Text.translatable("block.suture_n_sorcery.condensator");
+        return Text.translatable("block.suture_n_sorcery.condenser");
     }
 
     public static final int slot = 4;
@@ -147,7 +144,7 @@ public class CondensatorBlockEntity extends BlockEntity implements SidedInventor
 
     @Override
     public @Nullable ScreenHandler createMenu(int syncId, PlayerInventory playerInventory, PlayerEntity player) {
-        return new CondensatorScreenHandler(syncId, playerInventory, this, properties);
+        return new CondenserScreenHandler(syncId, playerInventory, this, properties);
     }
 
     // nbt

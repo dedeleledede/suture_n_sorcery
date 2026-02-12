@@ -4,8 +4,8 @@
   "texture_size": [64, 64],
   "ambientocclusion": false,
   "textures": {
-    "0": "suture_n_sorcery:block/condensator",
-    "particle": "suture_n_sorcery:block/condensator"
+    "0": "suture_n_sorcery:block/condenser",
+    "particle": "suture_n_sorcery:block/condenser"
   },
   "elements": [
     {

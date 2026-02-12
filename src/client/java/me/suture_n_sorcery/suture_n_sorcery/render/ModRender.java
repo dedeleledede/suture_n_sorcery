@@ -1,7 +1,7 @@
 package me.suture_n_sorcery.suture_n_sorcery.render;
 
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
-import me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator.Condensator;
+import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.Condenser;
 import me.suture_n_sorcery.suture_n_sorcery.client.particles.client.BloodParticle;
 import me.suture_n_sorcery.suture_n_sorcery.client.particles.client.BloodSplatParticle;
 import me.suture_n_sorcery.suture_n_sorcery.fluids.ConcentratedBlood.ConcentratedBloodFluid;
@@ -21,12 +21,12 @@ public class ModRender {
 
         BlockRenderLayerMap.putBlocks(
                 BlockRenderLayer.CUTOUT,
-                Condensator.CONDENSATOR
+                Condenser.CONDENSATOR
         );
 
         BlockRenderLayerMap.putBlocks(
                 BlockRenderLayer.CUTOUT_MIPPED,
-                Condensator.CONDENSATOR
+                Condenser.CONDENSATOR
         );
 
         // CONCENTRATED BLOOD

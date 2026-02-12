@@ -1,4 +1,4 @@
-package me.suture_n_sorcery.suture_n_sorcery.blocks.Condensator;
+package me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser;
 
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModScreenHandlers;
 import net.minecraft.entity.player.PlayerEntity;
@@ -15,7 +15,7 @@ import net.minecraft.screen.slot.Slot;
 
 import java.util.Set;
 
-public class CondensatorScreenHandler extends ScreenHandler {
+public class CondenserScreenHandler extends ScreenHandler {
 
     // 0 = progress, 1 = maxProgress, 2 = tankMl
     private final PropertyDelegate properties;
@@ -44,11 +44,11 @@ public class CondensatorScreenHandler extends ScreenHandler {
             @Override public boolean canInsert(ItemStack stack) { return stack.isOf(Items.BUCKET); }
         }
 
-    public CondensatorScreenHandler(int syncId, PlayerInventory playerInventory) {
-        this(syncId, playerInventory, new SimpleInventory(CondensatorBlockEntity.slot), new ArrayPropertyDelegate(3));
+    public CondenserScreenHandler(int syncId, PlayerInventory playerInventory) {
+        this(syncId, playerInventory, new SimpleInventory(CondenserBlockEntity.slot), new ArrayPropertyDelegate(3));
     }
 
-    public CondensatorScreenHandler(int syncId, PlayerInventory playerInventory, Inventory inventory, PropertyDelegate properties) {
+    public CondenserScreenHandler(int syncId, PlayerInventory playerInventory, Inventory inventory, PropertyDelegate properties) {
         super(ModScreenHandlers.CONDENSATOR_SCREEN, syncId);
         this.inventory = inventory;
         this.properties = properties;
@@ -86,14 +86,14 @@ public class CondensatorScreenHandler extends ScreenHandler {
         ItemStack stack = slot.getStack();
         ItemStack original = stack.copy();
 
-        final int MACHINE_SLOTS = CondensatorBlockEntity.slot;
+        final int MACHINE_SLOTS = CondenserBlockEntity.slot;
         final int PLAYER_END = this.slots.size();
 
         if (slotIndex < MACHINE_SLOTS) {
             if (!this.insertItem(stack, MACHINE_SLOTS, PLAYER_END, true)) return ItemStack.EMPTY;
             slot.onQuickTransfer(stack, original);
         } else {
-            if (CondensatorScreenHandler.PROCESSABLE_INPUTS.contains(stack.getItem())) {
+            if (CondenserScreenHandler.PROCESSABLE_INPUTS.contains(stack.getItem())) {
                 if (!this.insertItem(stack, 0, 1, false)) return ItemStack.EMPTY;
             }
             else if (stack.isOf(Items.BUCKET)) {
@@ -130,6 +130,6 @@ public class CondensatorScreenHandler extends ScreenHandler {
     public int getScaledTank(int pixels) {
         int ml = getTankMl();
         if (ml <= 0) return 0;
-        return ml * pixels / CondensatorBlockEntity.TANK_CAPACITY_ML;
+        return ml * pixels / CondenserBlockEntity.TANK_CAPACITY_ML;
     }
 }
