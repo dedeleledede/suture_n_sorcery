@@ -3,7 +3,7 @@
 
 A **dark magic** mod for Minecraft (currently) **Fabric 1.21.10** that explores blood, thread, and ritual mechanics. Focused on ritual craft, viscera-laced alchemy, and the quiet horror of “useful” power.
 
-This project leans into the kind of magic that feels **earned**—measured in stains, stitches, and consequences—rather than fireworks and convenience. If you like occult systems, grim craftsmanship, and UI that feels like it belongs in a forbidden workshop, you’re in the right place.
+This project leans into the kind of magic that feels **earned** and measured in stains, stitches, consequences. Rather than fireworks and convenience. If you like occult systems, grim craftsmanship, and UI that feels like it belongs in a forbidden workshop, you’re in the right place.
 
 > **Status:** In active development. Expect changes, refactors, and the occasional broken ritual circle.
 
