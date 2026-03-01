@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:smelting",
+  "category": "misc",
+  "ingredient": "minecraft:bone",
+  "result": { "id": "suture_n_sorcery:bone_marrow", "count": 1 },
+  "experience": 10,
+  "cookingtime": 200
+}
