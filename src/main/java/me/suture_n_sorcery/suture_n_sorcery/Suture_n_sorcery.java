@@ -1,5 +1,6 @@
 package me.suture_n_sorcery.suture_n_sorcery;
 
+import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomRitualHandler;
 import me.suture_n_sorcery.suture_n_sorcery.registries.*;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
@@ -23,5 +24,7 @@ public class Suture_n_sorcery implements ModInitializer {
         ModParticles.registerParticles();
         ModBlockEntities.registerBlockEntities();
         ModScreenHandlers.registerScreenHandlers();
+        RitualLoomRitualHandler.registerRitualLoomRituals();
+        ModSounds.registerSounds();
     }
 }
