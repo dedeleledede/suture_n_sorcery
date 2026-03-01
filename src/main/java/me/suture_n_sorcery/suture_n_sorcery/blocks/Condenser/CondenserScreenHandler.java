@@ -49,7 +49,7 @@ public class CondenserScreenHandler extends ScreenHandler {
     }
 
     public CondenserScreenHandler(int syncId, PlayerInventory playerInventory, Inventory inventory, PropertyDelegate properties) {
-        super(ModScreenHandlers.CONDENSATOR_SCREEN, syncId);
+        super(ModScreenHandlers.CONDENSER_SCREEN, syncId);
         this.inventory = inventory;
         this.properties = properties;
 

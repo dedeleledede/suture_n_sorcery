@@ -11,7 +11,7 @@ public class CondenserItem extends BlockItem {
     public CondenserItem(Item.Settings settings) { super(Condenser.CONDENSATOR, settings); }
 
     public static final Identifier CONDENSATOR_ITEM_ID =
-            Identifier.of(Suture_n_sorcery.MOD_ID, "condensator");
+            Identifier.of(Suture_n_sorcery.MOD_ID, "condenser");
 
     public static final RegistryKey<Item> CONDENSATOR_ITEM_KEY =
             RegistryKey.of(RegistryKeys.ITEM, CONDENSATOR_ITEM_ID);

@@ -123,7 +123,7 @@ public class Condenser extends HorizontalFacingBlock implements BlockEntityProvi
 
     //registry
     public static final Identifier CONDENSATOR_ID =
-            Identifier.of(Suture_n_sorcery.MOD_ID, "condensator");
+            Identifier.of(Suture_n_sorcery.MOD_ID, "condenser");
 
     public static final RegistryKey<Block> CONDENSATOR_KEY =
             RegistryKey.of(RegistryKeys.BLOCK, CONDENSATOR_ID);
