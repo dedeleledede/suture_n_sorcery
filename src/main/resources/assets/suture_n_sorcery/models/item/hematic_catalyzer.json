@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "suture_n_sorcery:item/hematic_catalyzer"
+  }
+}

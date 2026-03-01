@@ -1,0 +1,8 @@
+{
+  "input": { "item": "suture_n_sorcery:bone_marrow" },
+  "result": { "item": "suture_n_sorcery:hematic_catalyzer", "count": 1 },
+
+  "blood_ml": 800,
+  "press_ticks": 120,
+  "required_strings": 6
+}
