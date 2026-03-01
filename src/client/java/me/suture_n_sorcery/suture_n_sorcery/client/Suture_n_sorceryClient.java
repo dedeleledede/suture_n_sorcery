@@ -1,8 +1,9 @@
 package me.suture_n_sorcery.suture_n_sorcery.client;
 
 import me.suture_n_sorcery.suture_n_sorcery.client.screens.CondenserScreen;
+import me.suture_n_sorcery.suture_n_sorcery.client.screens.RitualLoomScreen;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModScreenHandlers;
-import me.suture_n_sorcery.suture_n_sorcery.render.ModRender;
+import me.suture_n_sorcery.suture_n_sorcery.render.*;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.gui.screen.ingame.HandledScreens;
 
@@ -12,6 +13,8 @@ public class Suture_n_sorceryClient implements ClientModInitializer {
     public void onInitializeClient() {
 
         ModRender.registerRender();
-        HandledScreens.register(ModScreenHandlers.CONDENSATOR_SCREEN, CondenserScreen::new);
+        ModShader.registerShader();
+        HandledScreens.register(ModScreenHandlers.CONDENSER_SCREEN, CondenserScreen::new);
+        HandledScreens.register(ModScreenHandlers.RITUAL_LOOM_SCREEN, RitualLoomScreen::new);
     }
 }
