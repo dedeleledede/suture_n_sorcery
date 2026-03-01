@@ -3,9 +3,7 @@ package me.suture_n_sorcery.suture_n_sorcery.registries;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserItem;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomItem;
-import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
-import me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze;
-import me.suture_n_sorcery.suture_n_sorcery.items.Gauze;
+import me.suture_n_sorcery.suture_n_sorcery.items.*;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
@@ -24,6 +22,8 @@ public class ItemGroups {
                 entries.add(new ItemStack(CondenserItem.CONDENSATOR_ITEM));
                 entries.add(new ItemStack(ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET));
                 entries.add(new ItemStack(RitualLoomItem.RITUAL_LOOM_ITEM));
+                entries.add(new ItemStack(HematicCatalyzer.HEMATIC_CATALYZER));
+                entries.add(new ItemStack(BoneMarrow.BONE_MARROW));
              })
             .build();
 

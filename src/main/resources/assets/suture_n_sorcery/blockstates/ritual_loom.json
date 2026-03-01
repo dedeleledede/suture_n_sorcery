@@ -1,0 +1,18 @@
+{
+  "multipart": [
+    { "when": { "part": "main", "facing": "north" }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_main", "y": 0 } },
+    { "when": { "part": "main", "facing": "east"  }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_main", "y": 90 } },
+    { "when": { "part": "main", "facing": "south" }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_main", "y": 180 } },
+    { "when": { "part": "main", "facing": "west"  }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_main", "y": 270 } },
+
+    { "when": { "part": "extension", "facing": "north" }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_secondary", "y": 0 } },
+    { "when": { "part": "extension", "facing": "east"  }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_secondary", "y": 90 } },
+    { "when": { "part": "extension", "facing": "south" }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_secondary", "y": 180 } },
+    { "when": { "part": "extension", "facing": "west"  }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_secondary", "y": 270 } },
+
+    { "when": { "part": "main", "strings": "true", "facing": "north" }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_strings", "y": 0 } },
+    { "when": { "part": "main", "strings": "true", "facing": "east"  }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_strings", "y": 90 } },
+    { "when": { "part": "main", "strings": "true", "facing": "south" }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_strings", "y": 180 } },
+    { "when": { "part": "main", "strings": "true", "facing": "west"  }, "apply": { "model": "suture_n_sorcery:block/ritual_loom_strings", "y": 270 } }
+  ]
+}

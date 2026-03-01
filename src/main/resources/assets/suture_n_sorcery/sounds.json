@@ -1,0 +1,12 @@
+{
+  "ritual_loom_pressurize": {
+    "sounds": [
+      { "name": "suture_n_sorcery:ritual_loom_pressurize" }
+    ]
+  },
+  "ritual_loom_success": {
+    "sounds": [
+      { "name": "suture_n_sorcery:ritual_loom_success" }
+    ]
+  }
+}

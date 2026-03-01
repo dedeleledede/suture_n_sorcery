@@ -9,6 +9,7 @@
   "license": "All-Rights-Reserved",
   "icon": "assets/suture_n_sorcery/icon.png",
   "environment": "*",
+  "accessWidener": "suture_n_sorcery.accesswidener",
   "entrypoints": {
     "fabric-datagen": [
       "me.suture_n_sorcery.suture_n_sorcery.client.Suture_n_sorceryDataGenerator"

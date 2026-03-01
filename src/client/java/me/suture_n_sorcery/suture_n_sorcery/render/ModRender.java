@@ -49,6 +49,5 @@ public class ModRender {
 
         ParticleFactoryRegistry.getInstance().register(ModParticles.BLOOD_DROP, BloodDropParticle.Factory::new);
         ParticleFactoryRegistry.getInstance().register(ModParticles.BLOOD_PARTICLE, BloodParticle.Factory::new);
-        ParticleFactoryRegistry.getInstance().register(ModParticles.BLOOD_SPLAT, BloodSplatParticle.Factory::new);
+        ParticleFactoryRegistry.getInstance().register(ModParticles.BLOOD_SPLAT, BloodSplatParticle.Factory::new);}
     }
-}
