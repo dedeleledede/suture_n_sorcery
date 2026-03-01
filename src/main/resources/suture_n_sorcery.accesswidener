@@ -1,0 +1,11 @@
+accessWidener v2 named
+
+accessible class net/minecraft/client/gl/RenderPipelines
+
+# we need the GUI snippet (it's private in vanilla)
+accessible field net/minecraft/client/gl/RenderPipelines GUI_SNIPPET Lcom/mojang/blaze3d/pipeline/RenderPipeline$Snippet;
+
+# we need to register a pipeline (it's private in vanilla)
+accessible method net/minecraft/client/gl/RenderPipelines register (Lcom/mojang/blaze3d/pipeline/RenderPipeline;)Lcom/mojang/blaze3d/pipeline/RenderPipeline;
+
+accessible method net/minecraft/client/gui/DrawContext drawTexturedQuad (Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lcom/mojang/blaze3d/textures/GpuTextureView;IIIIFFFFI)V
