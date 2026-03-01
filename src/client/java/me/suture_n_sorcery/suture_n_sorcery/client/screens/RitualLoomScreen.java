@@ -7,7 +7,7 @@ import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomBlockEnt
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomScreenHandler;
 import me.suture_n_sorcery.suture_n_sorcery.client.audio.PressControllerInstance;
 import me.suture_n_sorcery.suture_n_sorcery.client.audio.PressurizeArm;
-import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyzer;
+import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.mixin.client.DrawContextInvoker;
 import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 
@@ -1191,7 +1191,7 @@ public class RitualLoomScreen extends HandledScreen<RitualLoomScreenHandler>{
     }
     private boolean isHematicCatalyzer(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return false;
-        return Registries.ITEM.getId(stack.getItem()).equals(HematicCatalyzer.HEMATIC_CATALYZER_ID);
+        return Registries.ITEM.getId(stack.getItem()).equals(HematicCatalyst.HEMATIC_CATALYST_ID);
     }
     private static float smoothstep01(float x) {
         x = Math.max(0f, Math.min(1f, x));

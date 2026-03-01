@@ -10,19 +10,17 @@ import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 
-import java.util.Objects;
+public class HematicCatalyst extends Item {
+    public HematicCatalyst(Settings settings) { super(settings); }
 
-public class HematicCatalyzer extends Item {
-    public HematicCatalyzer(Settings settings) { super(settings); }
+    public static final Identifier HEMATIC_CATALYST_ID =
+            Identifier.of(Suture_n_sorcery.MOD_ID, "HEMATIC_CATALYST");
 
-    public static final Identifier HEMATIC_CATALYZER_ID =
-            Identifier.of(Suture_n_sorcery.MOD_ID, "hematic_catalyzer");
+    public static final RegistryKey<Item> HEMATIC_CATALYST_KEY =
+            RegistryKey.of(RegistryKeys.ITEM, HEMATIC_CATALYST_ID);
 
-    public static final RegistryKey<Item> HEMATIC_CATALYZER_KEY =
-            RegistryKey.of(RegistryKeys.ITEM, HEMATIC_CATALYZER_ID);
-
-    public static final Item HEMATIC_CATALYZER = new HematicCatalyzer(new Settings()
-            .registryKey(HEMATIC_CATALYZER_KEY)
+    public static final Item HEMATIC_CATALYST = new HematicCatalyst(new Settings()
+            .registryKey(HEMATIC_CATALYST_KEY)
             .maxCount(64)
     );
 

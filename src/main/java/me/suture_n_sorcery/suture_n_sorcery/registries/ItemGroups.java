@@ -22,7 +22,7 @@ public class ItemGroups {
                 entries.add(new ItemStack(CondenserItem.CONDENSATOR_ITEM));
                 entries.add(new ItemStack(ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET));
                 entries.add(new ItemStack(RitualLoomItem.RITUAL_LOOM_ITEM));
-                entries.add(new ItemStack(HematicCatalyzer.HEMATIC_CATALYZER));
+                entries.add(new ItemStack(HematicCatalyst.HEMATIC_CATALYST));
                 entries.add(new ItemStack(BoneMarrow.BONE_MARROW));
              })
             .build();
