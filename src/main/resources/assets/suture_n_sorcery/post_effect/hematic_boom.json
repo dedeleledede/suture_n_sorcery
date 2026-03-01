@@ -1,0 +1,31 @@
+{
+  "targets": {
+    "swap": {}
+  },
+  "passes": [
+    {
+      "vertex_shader": "minecraft:core/screenquad",
+      "fragment_shader": "suture_n_sorcery:post/hematic_boom",
+      "inputs": [
+        { "sampler_name": "In", "target": "minecraft:main", "bilinear": true }
+      ],
+      "output": "swap",
+      "uniforms": {
+        "HematicBoom": [
+          { "name": "u_center",   "type": "vec2",  "value": [0.5, 0.5] },
+          { "name": "u_radius",   "type": "float", "value": 0.0 },
+          { "name": "u_width",    "type": "float", "value": 0.10 },
+          { "name": "u_strength", "type": "float", "value": 0.35 }
+        ]
+      }
+    },
+    {
+      "vertex_shader": "minecraft:core/screenquad",
+      "fragment_shader": "suture_n_sorcery:post/copy",
+      "inputs": [
+        { "sampler_name": "In", "target": "swap", "bilinear": true }
+      ],
+      "output": "minecraft:main"
+    }
+  ]
+}
