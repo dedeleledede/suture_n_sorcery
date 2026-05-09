@@ -302,6 +302,155 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         return false;
     }
 
+    private boolean pressurizeTick(boolean coreEmpty) {
+        if (!pressurizing) return false;
+
+        if (coreEmpty || coreIsOutput) {
+            stopPressurizing();
+            phase = idleOrSaturated(saturatedStrings);
+            return true;
+        }
+
+        var def = RitualLoomRitualHandler.get(getStack(CORE_SLOT));
+        if (def == null) {
+            stopPressurizing();
+            phase = RitualLoomPhase.FAILED;
+            return true;
+        }
+
+        if (saturatedStrings < def.requiredStrings()) {
+            stopPressurizing();
+            phase = RitualLoomPhase.CORE_INSERTED;
+            return true;
+        }
+
+        int totalTicks = Math.max(1, def.pressTicks());
+        int totalCost = Math.max(0, def.bloodMlCost());
+        int cost = nextPressBloodCost(totalTicks, totalCost);
+
+        if (bloodMl < cost) {
+            stopPressurizing();
+            phase = RitualLoomPhase.FAILED;
+            return true;
+        }
+
+        bloodMl -= cost;
+        pressTicksElapsed++;
+        pressure = Math.min(MAX_PRESSURE, (pressTicksElapsed * MAX_PRESSURE) / totalTicks);
+        phase = RitualLoomPhase.PRESSURIZING;
+
+        if (pressTicksElapsed >= totalTicks) {
+            completePressurization(def);
+        }
+
+        return true;
+    }
+
+    private int nextPressBloodCost(int totalTicks, int totalCost) {
+        int baseCost = totalCost / totalTicks;
+        int remainder = totalCost - baseCost * totalTicks;
+
+        int cost = baseCost;
+        pressCostCarry += remainder;
+        if (pressCostCarry >= totalTicks) {
+            cost += 1;
+            pressCostCarry -= totalTicks;
+        }
+
+        return cost;
+    }
+
+    private void completePressurization(RitualLoomRitualHandler.RitualDef def) {
+        stopPressurizing();
+
+        saturatedStrings = Math.max(0, saturatedStrings - def.requiredStrings());
+
+        setStack(CORE_SLOT, def.result().copy());
+        coreIsOutput = true;
+
+        coreNonce++;          // FX trigger: craft complete
+        phase = RitualLoomPhase.COMPLETE;
+    }
+
+    private boolean absorbBloodBucket() {
+        ItemStack bucket = getStack(BUCKET_SLOT);
+        if (bloodMl + BUCKET_ML > MAX_BLOOD_ML || !bucket.isOf(ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET)) {
+            return false;
+        }
+
+        bloodMl += BUCKET_ML;
+        setStack(BUCKET_SLOT, new ItemStack(Items.BUCKET));
+        return true;
+    }
+
+    private boolean maintainCorePhase(boolean coreEmpty) {
+        if (!coreEmpty && !pressurizing && !coreIsOutput) {
+            if (phase != RitualLoomPhase.CORE_INSERTED && phase != RitualLoomPhase.FAILED) {
+                phase = RitualLoomPhase.CORE_INSERTED;
+                return true;
+            }
+        }
+
+        if (coreEmpty && !pressurizing) {
+            if (phase == RitualLoomPhase.CORE_INSERTED || phase == RitualLoomPhase.PRESSURIZING) {
+                pressure = 0;
+                phase = idleOrSaturated(saturatedStrings);
+                return true;
+            } else if (phase != RitualLoomPhase.SATURATING) {
+                RitualLoomPhase desired = idleOrSaturated(saturatedStrings);
+                if (phase != desired) {
+                    phase = desired;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private boolean recoverTerminalPhase() {
+        if (phase == RitualLoomPhase.COMPLETE) {
+            if (getStack(CORE_SLOT).isEmpty()) {
+                coreIsOutput = false;
+                RitualLoomPhase desired = idleOrSaturated(saturatedStrings);
+                if (phase != desired) {
+                    phase = desired;
+                    return true;
+                }
+            }
+        } else if (phase == RitualLoomPhase.FAILED) {
+            RitualLoomPhase desired = getStack(CORE_SLOT).isEmpty()
+                    ? idleOrSaturated(saturatedStrings)
+                    : RitualLoomPhase.CORE_INSERTED;
+
+            if (phase != desired) {
+                phase = desired;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private boolean decayPressure() {
+        if (pressurizing || pressure <= 0) return false;
+
+        pressure = Math.max(0, pressure - 15);
+        return true;
+    }
+
+    private void syncChangedState(World world, BlockPos pos, BlockState state) {
+        markDirty();
+        world.updateListeners(pos, state, state, 3);
+
+        if (state.contains(RitualLoom.STRINGS)) {
+            boolean show = saturatedStrings > 0;
+            if (state.get(RitualLoom.STRINGS) != show) {
+                world.setBlockState(pos, state.with(RitualLoom.STRINGS, show), 3);
+            }
+        }
+    }
+
     // ticking
     public static void tick(World world, BlockPos pos, BlockState state, RitualLoomBlockEntity be) {
         if (world.isClient()) return;
@@ -310,9 +459,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         boolean corePresent = !be.getStack(CORE_SLOT).isEmpty();
         boolean coreEmpty = !corePresent;
 
-        // passive lowering pressurize
-        if (!be.pressurizing && be.pressure > 0) {
-            be.pressure = Math.max(0, be.pressure - 15);
+        if (be.decayPressure()) {
             changed = true;
         }
 
@@ -324,29 +471,12 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
             changed = true;
         }
 
-        ItemStack bucket = be.getStack(BUCKET_SLOT);
-        if (be.bloodMl + BUCKET_ML <= MAX_BLOOD_ML && bucket.isOf(ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET)) {
-            be.bloodMl += BUCKET_ML;
-            be.setStack(BUCKET_SLOT, new ItemStack(Items.BUCKET));
+        if (be.absorbBloodBucket()) {
             changed = true;
         }
 
-        if (!coreEmpty && !be.pressurizing && !be.coreIsOutput) {
-            if (be.phase != RitualLoomPhase.CORE_INSERTED && be.phase != RitualLoomPhase.FAILED) {
-                be.phase = RitualLoomPhase.CORE_INSERTED;
-                changed = true;
-            }
-        }
-
-        if (coreEmpty && !be.pressurizing) {
-            if (be.phase == RitualLoomPhase.CORE_INSERTED || be.phase == RitualLoomPhase.PRESSURIZING) {
-                be.pressure = 0;
-                be.phase = idleOrSaturated(be.saturatedStrings);
-                changed = true;
-            } else if (be.phase != RitualLoomPhase.SATURATING) {
-                RitualLoomPhase desired = idleOrSaturated(be.saturatedStrings);
-                if (be.phase != desired) { be.phase = desired; changed = true; }
-            }
+        if (be.maintainCorePhase(coreEmpty)) {
+            changed = true;
         }
 
         if (coreEmpty && be.loadStringFromSlot()) {
@@ -357,94 +487,16 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
             changed = true;
         }
 
-        if (be.pressurizing) {
-            if (coreEmpty || be.coreIsOutput) {
-                be.stopPressurizing();
-
-                be.phase = idleOrSaturated(be.saturatedStrings);
-                changed = true;
-
-            } else {
-                var def = RitualLoomRitualHandler.get(be.getStack(CORE_SLOT));
-                if (def == null) {
-                    be.stopPressurizing();
-                    be.phase = RitualLoomPhase.FAILED;
-                    changed = true;
-
-                } else if (be.saturatedStrings < def.requiredStrings()) {
-                    be.stopPressurizing();
-                    be.phase = RitualLoomPhase.CORE_INSERTED;
-                    changed = true;
-
-                } else {
-                    int totalTicks = Math.max(1, def.pressTicks());
-                    int totalCost = Math.max(0, def.bloodMlCost());
-
-                    int baseCost = totalCost / totalTicks;
-                    int rem = totalCost - baseCost * totalTicks;
-
-                    int cost = baseCost;
-                    be.pressCostCarry += rem;
-                    if (be.pressCostCarry >= totalTicks) {
-                        cost += 1;
-                        be.pressCostCarry -= totalTicks;
-                    }
-
-                    if (be.bloodMl < cost) {
-                        be.stopPressurizing();
-                        be.phase = RitualLoomPhase.FAILED;
-
-                    } else {
-                        be.bloodMl -= cost;
-                        be.pressTicksElapsed++;
-                        be.pressure = Math.min(MAX_PRESSURE, (be.pressTicksElapsed * MAX_PRESSURE) / totalTicks);
-                        be.phase = RitualLoomPhase.PRESSURIZING;
-
-                        if (be.pressTicksElapsed >= totalTicks) {
-                            be.stopPressurizing();
-
-                            be.saturatedStrings = Math.max(0, be.saturatedStrings - def.requiredStrings());
-
-                            be.setStack(CORE_SLOT, def.result().copy());
-                            be.coreIsOutput = true;
-
-                            be.coreNonce++;          // FX trigger: craft complete
-                            be.phase = RitualLoomPhase.COMPLETE;
-                        }
-
-                    }
-                    changed = true;
-                }
-            }
+        if (be.pressurizeTick(coreEmpty)) {
+            changed = true;
         }
 
-        if (be.phase == RitualLoomPhase.COMPLETE) {
-            if (be.getStack(CORE_SLOT).isEmpty()) {
-                be.coreIsOutput = false;
-                RitualLoomPhase desired = idleOrSaturated(be.saturatedStrings);
-                if (be.phase != desired) { be.phase = desired; changed = true; }
-            }
-        } else if (be.phase == RitualLoomPhase.FAILED) {
-            RitualLoomPhase desired = be.getStack(CORE_SLOT).isEmpty()
-                    ? idleOrSaturated(be.saturatedStrings)
-                    : RitualLoomPhase.CORE_INSERTED;
-
-            if (be.phase != desired) {
-                be.phase = desired;
-                changed = true;
-            }
+        if (be.recoverTerminalPhase()) {
+            changed = true;
         }
 
         if (changed) {
-            be.markDirty();
-            world.updateListeners(pos, state, state, 3);
-
-            if (state.contains(RitualLoom.STRINGS)) {
-                boolean show = be.saturatedStrings > 0;
-                if (state.get(RitualLoom.STRINGS) != show) {
-                    world.setBlockState(pos, state.with(RitualLoom.STRINGS, show), 3);
-                }
-            }
+            be.syncChangedState(world, pos, state);
         }
     }
 
