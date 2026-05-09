@@ -15,28 +15,28 @@ import net.minecraft.screen.slot.Slot;
 
 public class RitualLoomScreenHandler extends ScreenHandler {
     // Machine slot indices
-    public static final int BUCKET_SLOT = 0;
-    public static final int STRING_SLOT = 1;
-    public static final int CORE_SLOT   = 2;
+    public static final int BUCKET_SLOT = RitualLoomBlockEntity.BUCKET_SLOT;
+    public static final int STRING_SLOT = RitualLoomBlockEntity.STRING_SLOT;
+    public static final int CORE_SLOT   = RitualLoomBlockEntity.CORE_SLOT;
 
     public static final int CORE_X = 100;
     public static final int CORE_Y = 36;
 
-    public static final int MACHINE_SLOT_COUNT = 3;
+    public static final int MACHINE_SLOT_COUNT = RitualLoomBlockEntity.MACHINE_SLOT_COUNT;
+    private static final int MACHINE_START = 0;
+    private static final int MACHINE_END_EXCL = MACHINE_START + MACHINE_SLOT_COUNT;
 
     // button ids (ScreenHandler clickButton)
     public static final int BTN_PRESSURIZE_START = 200;
     public static final int BTN_PRESSURIZE_STOP  = 201;
 
-    private static final int PROP_COUNT = 13;
-
     private final Inventory inventory;
     private final PropertyDelegate properties;
 
     public RitualLoomScreenHandler(int syncId, PlayerInventory playerInventory) {
-        this(syncId, playerInventory,
+                this(syncId, playerInventory,
                 new net.minecraft.inventory.SimpleInventory(MACHINE_SLOT_COUNT),
-                new ArrayPropertyDelegate(PROP_COUNT)
+                new ArrayPropertyDelegate(RitualLoomBlockEntity.PROPERTY_COUNT)
         );
     }
 
@@ -49,7 +49,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
 
         inventory.onOpen(playerInventory.player);
 
-        // Bucket sloT
+        // Bucket slot
         this.addSlot(new Slot(inventory, BUCKET_SLOT, 6, 18) {
             @Override
             public boolean canInsert(ItemStack stack) {
@@ -68,7 +68,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
         });
 
         // CORE SLOT
-        this.addSlot(new Slot(inventory, RitualLoomBlockEntity.CORE_SLOT, CORE_X, CORE_Y) {
+        this.addSlot(new Slot(inventory, CORE_SLOT, CORE_X, CORE_Y) {
 
             private boolean ready() {
                 if (!this.getStack().isEmpty()) return true;
@@ -153,6 +153,33 @@ public class RitualLoomScreenHandler extends ScreenHandler {
         return RitualLoomRitualHandler.get(stack) != null;
     }
 
+    private boolean canQuickMoveCore(ItemStack stack) {
+        return isCoreAllowed(stack)
+                && getStrings() >= RitualLoomBlockEntity.REQUIRED_STRINGS
+                && getPhase() != RitualLoomBlockEntity.PHASE_PRESSURIZING
+                && !this.slots.get(CORE_SLOT).hasStack();
+    }
+
+    private boolean tryQuickMoveOneCore(PlayerEntity player, Slot slot, ItemStack original) {
+        if (!canQuickMoveCore(original)) return false;
+
+        ItemStack one = original.copy();
+        one.setCount(1);
+
+        if (!player.getEntityWorld().isClient() && inventory instanceof RitualLoomBlockEntity be && !be.canInsertCore(one)) {
+            return false;
+        }
+
+        if (!this.insertItem(one, CORE_SLOT, CORE_SLOT + 1, false)) {
+            return false;
+        }
+
+        original.decrement(1);
+        slot.markDirty();
+        if (original.isEmpty()) slot.setStack(ItemStack.EMPTY);
+        return true;
+    }
+
     @Override
     public ItemStack quickMove(PlayerEntity player, int slotIndex) {
         ItemStack empty = ItemStack.EMPTY;
@@ -162,41 +189,14 @@ public class RitualLoomScreenHandler extends ScreenHandler {
         ItemStack original = slot.getStack();
         ItemStack copy = original.copy();
 
-        final int MACHINE_START = 0;
-        final int MACHINE_END_EXCL = 3;
-
         // player inventory slots start right after machine slots
         final int PLAYER_END_EXCL = this.slots.size();
 
         if (slotIndex >= MACHINE_END_EXCL) {
 
             // Try core slot FIRST, but only move ONE item
-            if (isCoreAllowed(original)
-                    && getStrings() >= RitualLoomBlockEntity.REQUIRED_STRINGS
-                    && getPhase() != RitualLoomBlockEntity.PHASE_PRESSURIZING
-                    && !this.slots.get(RitualLoomBlockEntity.CORE_SLOT).hasStack()) {
-
-                ItemStack one = original.copy();
-                one.setCount(1);
-
-                if (!player.getEntityWorld().isClient() && inventory instanceof RitualLoomBlockEntity be) {
-                    if (!be.canInsertCore(one)) {
-                        // do nothing
-                    } else if (this.insertItem(one, RitualLoomBlockEntity.CORE_SLOT, RitualLoomBlockEntity.CORE_SLOT + 1, false)) {
-                        original.decrement(1);
-                        slot.markDirty();
-                        if (original.isEmpty()) slot.setStack(ItemStack.EMPTY);
-                        return copy;
-                    }
-                } else {
-                    // client: try insert; server will correct
-                    if (this.insertItem(one, RitualLoomBlockEntity.CORE_SLOT, RitualLoomBlockEntity.CORE_SLOT + 1, false)) {
-                        original.decrement(1);
-                        slot.markDirty();
-                        if (original.isEmpty()) slot.setStack(ItemStack.EMPTY);
-                        return copy;
-                    }
-                }
+            if (tryQuickMoveOneCore(player, slot, original)) {
+                return copy;
             }
 
             // let vanilla try other machine slots (bucket/string)
@@ -220,23 +220,23 @@ public class RitualLoomScreenHandler extends ScreenHandler {
         return copy;
     }
 
-    // synced values PropertyDelegat
-    public int getBloodMl()       { return properties.get(0); }
-    public int getBloodMaxMl()    { return properties.get(1); }
+    // synced values PropertyDelegate
+    public int getBloodMl()       { return properties.get(RitualLoomBlockEntity.PROP_BLOOD_ML); }
+    public int getBloodMaxMl()    { return properties.get(RitualLoomBlockEntity.PROP_MAX_BLOOD_ML); }
 
-    public int getPoleStrings()   { return properties.get(2); }
-    public int getSaturatedStrings()  { return properties.get(3); }
-    public int getStringsCap()    { return properties.get(4); }
+    public int getPoleStrings()   { return properties.get(RitualLoomBlockEntity.PROP_POLE_STRINGS); }
+    public int getSaturatedStrings()  { return properties.get(RitualLoomBlockEntity.PROP_SATURATED_STRINGS); }
+    public int getStringsCap()    { return properties.get(RitualLoomBlockEntity.PROP_MAX_STRINGS); }
 
-    public int getPhase()         { return properties.get(5); }
-    public int getSaturationTicks(){ return properties.get(6); } // now “convert ticks”
-    public int getPressure()      { return properties.get(7); }
-    public int getCoreNonce()     { return properties.get(8); }
-    public int getStringNonce()   { return properties.get(9); }
+    public int getPhase()         { return properties.get(RitualLoomBlockEntity.PROP_PHASE); }
+    public int getSaturationTicks(){ return properties.get(RitualLoomBlockEntity.PROP_SATURATION_TICKS); } // now “convert ticks”
+    public int getPressure()      { return properties.get(RitualLoomBlockEntity.PROP_PRESSURE); }
+    public int getCoreNonce()     { return properties.get(RitualLoomBlockEntity.PROP_CORE_NONCE); }
+    public int getStringNonce()   { return properties.get(RitualLoomBlockEntity.PROP_STRING_NONCE); }
 
-    public int getRecipeRequiredStrings() { return properties.get(10); }
-    public int getRecipePressTicks()      { return properties.get(11); }
-    public int getRecipeBloodCostMl()     { return properties.get(12); }
+    public int getRecipeRequiredStrings() { return properties.get(RitualLoomBlockEntity.PROP_ACTIVE_REQUIRED_STRINGS); }
+    public int getRecipePressTicks()      { return properties.get(RitualLoomBlockEntity.PROP_ACTIVE_PRESS_TICKS); }
+    public int getRecipeBloodCostMl()     { return properties.get(RitualLoomBlockEntity.PROP_ACTIVE_BLOOD_COST_ML); }
 
     public int getStrings() { return getSaturatedStrings(); }
 

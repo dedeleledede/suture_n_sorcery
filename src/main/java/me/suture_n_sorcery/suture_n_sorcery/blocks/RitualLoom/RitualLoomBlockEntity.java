@@ -29,6 +29,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     public static final int BUCKET_SLOT = 0;
     public static final int STRING_SLOT = 1;
     public static final int CORE_SLOT   = 2;
+    public static final int MACHINE_SLOT_COUNT = 3;
 
     private static final int[] ALL_SLOTS = new int[]{BUCKET_SLOT, STRING_SLOT, CORE_SLOT};
 
@@ -50,6 +51,32 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     // saturation tuning
     private static final int BLOOD_PER_STRING = 100;
     private static final int TICKS_PER_STRING = 15;
+
+    public static final int PROP_BLOOD_ML = 0;
+    public static final int PROP_MAX_BLOOD_ML = 1;
+    public static final int PROP_POLE_STRINGS = 2;
+    public static final int PROP_SATURATED_STRINGS = 3;
+    public static final int PROP_MAX_STRINGS = 4;
+    public static final int PROP_PHASE = 5;
+    public static final int PROP_SATURATION_TICKS = 6;
+    public static final int PROP_PRESSURE = 7;
+    public static final int PROP_CORE_NONCE = 8;
+    public static final int PROP_STRING_NONCE = 9;
+    public static final int PROP_ACTIVE_REQUIRED_STRINGS = 10;
+    public static final int PROP_ACTIVE_PRESS_TICKS = 11;
+    public static final int PROP_ACTIVE_BLOOD_COST_ML = 12;
+    public static final int PROPERTY_COUNT = 13;
+
+    private static final String NBT_BLOOD_ML = "BloodMl";
+    private static final String NBT_POLE_STRINGS = "PoleStrings";
+    private static final String NBT_SATURATED_STRINGS = "Strings";
+    private static final String NBT_PHASE = "Phase";
+    private static final String NBT_SATURATION_TICKS = "SaturationTicks";
+    private static final String NBT_PRESSURE = "Pressure";
+    private static final String NBT_CORE_NONCE = "CoreNonce";
+    private static final String NBT_STRING_NONCE = "StringNonce";
+    private static final String NBT_PRESSURIZING = "Pressurizing";
+    private static final String NBT_CORE_IS_OUTPUT = "CoreIsOutput";
 
     // meters
     private int bloodMl = 0;
@@ -82,45 +109,45 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     // pressurization
     private static final int MAX_PRESSURE = 1000;
 
-    private final DefaultedList<ItemStack> inventory = DefaultedList.ofSize(3, ItemStack.EMPTY);
+    private final DefaultedList<ItemStack> inventory = DefaultedList.ofSize(MACHINE_SLOT_COUNT, ItemStack.EMPTY);
 
     // properties for screen
     private final PropertyDelegate properties = new PropertyDelegate() {
         @Override public int get(int index) {
             return switch (index) {
-                case 0 -> bloodMl;
-                case 1 -> MAX_BLOOD_ML;
-                case 2 -> poleStrings;
-                case 3 -> saturatedStrings;
-                case 4 -> MAX_STRINGS;
-                case 5 -> phase.id();
-                case 6 -> saturationTicks;
-                case 7 -> pressure;
-                case 8 -> coreNonce;
-                case 9 -> stringNonce;
-                case 10 -> activeRequiredStrings;
-                case 11 -> activePressTicks;
-                case 12 -> activeBloodCostMl;
+                case PROP_BLOOD_ML -> bloodMl;
+                case PROP_MAX_BLOOD_ML -> MAX_BLOOD_ML;
+                case PROP_POLE_STRINGS -> poleStrings;
+                case PROP_SATURATED_STRINGS -> saturatedStrings;
+                case PROP_MAX_STRINGS -> MAX_STRINGS;
+                case PROP_PHASE -> phase.id();
+                case PROP_SATURATION_TICKS -> saturationTicks;
+                case PROP_PRESSURE -> pressure;
+                case PROP_CORE_NONCE -> coreNonce;
+                case PROP_STRING_NONCE -> stringNonce;
+                case PROP_ACTIVE_REQUIRED_STRINGS -> activeRequiredStrings;
+                case PROP_ACTIVE_PRESS_TICKS -> activePressTicks;
+                case PROP_ACTIVE_BLOOD_COST_ML -> activeBloodCostMl;
                 default -> 0;
             };
         }
         @Override public void set(int index, int value) {
             switch (index) {
-                case 0 -> bloodMl = value;
-                case 2 -> poleStrings = value;
-                case 3 -> saturatedStrings = value;
-                case 5 -> phase = RitualLoomPhase.fromId(value);
-                case 6 -> saturationTicks = value;
-                case 7 -> pressure = value;
-                case 8 -> coreNonce = value;
-                case 9 -> stringNonce = value;
-                case 10 -> activeRequiredStrings = value;
-                case 11 -> activePressTicks = value;
-                case 12 -> activeBloodCostMl = value;
+                case PROP_BLOOD_ML -> bloodMl = value;
+                case PROP_POLE_STRINGS -> poleStrings = value;
+                case PROP_SATURATED_STRINGS -> saturatedStrings = value;
+                case PROP_PHASE -> phase = RitualLoomPhase.fromId(value);
+                case PROP_SATURATION_TICKS -> saturationTicks = value;
+                case PROP_PRESSURE -> pressure = value;
+                case PROP_CORE_NONCE -> coreNonce = value;
+                case PROP_STRING_NONCE -> stringNonce = value;
+                case PROP_ACTIVE_REQUIRED_STRINGS -> activeRequiredStrings = value;
+                case PROP_ACTIVE_PRESS_TICKS -> activePressTicks = value;
+                case PROP_ACTIVE_BLOOD_COST_ML -> activeBloodCostMl = value;
                 default -> { }
             }
         }
-        @Override public int size() { return 13; }
+        @Override public int size() { return PROPERTY_COUNT; }
     };
 
     public RitualLoomBlockEntity(BlockPos pos, BlockState state) {
@@ -505,32 +532,32 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     public void writeData(WriteView view) {
         super.writeData(view);
         Inventories.writeData(view, inventory);
-        view.putInt("BloodMl", bloodMl);
-        view.putInt("PoleStrings", poleStrings);
-        view.putInt("Strings", saturatedStrings);
-        view.putInt("Phase", phase.id());
-        view.putInt("SaturationTicks", saturationTicks);
-        view.putInt("Pressure", pressure);
-        view.putInt("CoreNonce", coreNonce);
-        view.putInt("StringNonce", stringNonce);
-        view.putBoolean("Pressurizing", pressurizing);
-        view.putBoolean("CoreIsOutput", coreIsOutput);
+        view.putInt(NBT_BLOOD_ML, bloodMl);
+        view.putInt(NBT_POLE_STRINGS, poleStrings);
+        view.putInt(NBT_SATURATED_STRINGS, saturatedStrings);
+        view.putInt(NBT_PHASE, phase.id());
+        view.putInt(NBT_SATURATION_TICKS, saturationTicks);
+        view.putInt(NBT_PRESSURE, pressure);
+        view.putInt(NBT_CORE_NONCE, coreNonce);
+        view.putInt(NBT_STRING_NONCE, stringNonce);
+        view.putBoolean(NBT_PRESSURIZING, pressurizing);
+        view.putBoolean(NBT_CORE_IS_OUTPUT, coreIsOutput);
     }
 
     @Override
     public void readData(ReadView view) {
         super.readData(view);
         Inventories.readData(view, inventory);
-        bloodMl = view.getInt("BloodMl", 0);
-        poleStrings = view.getInt("PoleStrings", 0);
-        saturatedStrings = view.getInt("Strings", 0);
-        phase = RitualLoomPhase.fromId(view.getInt("Phase", PHASE_IDLE));
-        saturationTicks = view.getInt("SaturationTicks", 0);
-        pressure = view.getInt("Pressure", 0);
-        coreNonce = view.getInt("CoreNonce", 0);
-        stringNonce = view.getInt("StringNonce", 0);
-        pressurizing = view.getBoolean("Pressurizing", false);
-        coreIsOutput = view.getBoolean("CoreIsOutput", false);
+        bloodMl = view.getInt(NBT_BLOOD_ML, 0);
+        poleStrings = view.getInt(NBT_POLE_STRINGS, 0);
+        saturatedStrings = view.getInt(NBT_SATURATED_STRINGS, 0);
+        phase = RitualLoomPhase.fromId(view.getInt(NBT_PHASE, PHASE_IDLE));
+        saturationTicks = view.getInt(NBT_SATURATION_TICKS, 0);
+        pressure = view.getInt(NBT_PRESSURE, 0);
+        coreNonce = view.getInt(NBT_CORE_NONCE, 0);
+        stringNonce = view.getInt(NBT_STRING_NONCE, 0);
+        pressurizing = view.getBoolean(NBT_PRESSURIZING, false);
+        coreIsOutput = view.getBoolean(NBT_CORE_IS_OUTPUT, false);
     }
 
     // sidedinv / inv
