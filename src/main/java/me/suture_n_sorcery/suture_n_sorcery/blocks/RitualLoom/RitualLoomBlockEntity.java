@@ -195,6 +195,50 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         return saturatedStrings >= REQUIRED_STRINGS ? RitualLoomPhase.SATURATED : RitualLoomPhase.IDLE;
     }
 
+    private boolean updateActiveRecipeParams(boolean coreEmpty) {
+        int oldReq = activeRequiredStrings;
+        int oldPress = activePressTicks;
+        int oldBlood = activeBloodCostMl;
+
+        if (!coreEmpty && !coreIsOutput) {
+            var def = RitualLoomRitualHandler.get(getStack(CORE_SLOT));
+            if (def != null) {
+                activeRequiredStrings = def.requiredStrings();
+                activePressTicks = def.pressTicks();
+                activeBloodCostMl = def.bloodMlCost();
+            } else {
+                clearActiveRecipeParams();
+            }
+        } else {
+            clearActiveRecipeParams();
+        }
+
+        return activeRequiredStrings != oldReq || activePressTicks != oldPress || activeBloodCostMl != oldBlood;
+    }
+
+    private void clearActiveRecipeParams() {
+        activeRequiredStrings = 0;
+        activePressTicks = 0;
+        activeBloodCostMl = 0;
+    }
+
+    private boolean handleCorePresenceChange(boolean corePresent) {
+        if (corePresent == lastCorePresent) return false;
+
+        lastCorePresent = corePresent;
+        coreIsOutput = false;         // inserted = input core
+
+        if (corePresent) {
+            resetPressProgress();
+            phase = RitualLoomPhase.CORE_INSERTED;
+        } else {
+            stopPressurizing();
+            phase = idleOrSaturated(saturatedStrings);
+        }
+
+        return true;
+    }
+
     // ticking
     public static void tick(World world, BlockPos pos, BlockState state, RitualLoomBlockEntity be) {
         if (world.isClient()) return;
@@ -209,47 +253,11 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
             changed = true;
         }
 
-        // update active recipe params (synced to client)
-        int oldReq = be.activeRequiredStrings;
-        int oldPress = be.activePressTicks;
-        int oldBlood = be.activeBloodCostMl;
-
-        if (!coreEmpty && !be.coreIsOutput) {
-            var def = RitualLoomRitualHandler.get(be.getStack(CORE_SLOT));
-            if (def != null) {
-                be.activeRequiredStrings = def.requiredStrings();
-                be.activePressTicks = def.pressTicks();
-                be.activeBloodCostMl = def.bloodMlCost();
-            } else {
-                be.activeRequiredStrings = 0;
-                be.activePressTicks = 0;
-                be.activeBloodCostMl = 0;
-            }
-        } else {
-            be.activeRequiredStrings = 0;
-            be.activePressTicks = 0;
-            be.activeBloodCostMl = 0;
-        }
-
-        if (be.activeRequiredStrings != oldReq || be.activePressTicks != oldPress || be.activeBloodCostMl != oldBlood) {
+        if (be.updateActiveRecipeParams(coreEmpty)) {
             changed = true;
         }
 
-        // detect core transitions for ripple
-        if (corePresent != be.lastCorePresent) {
-            be.lastCorePresent = corePresent;
-
-            be.coreIsOutput = false;         // inserted = input core
-            if (corePresent) {
-                be.resetPressProgress();
-
-                be.phase = RitualLoomPhase.CORE_INSERTED;
-            } else {
-                be.stopPressurizing();
-
-                be.phase = idleOrSaturated(be.saturatedStrings);
-            }
-
+        if (be.handleCorePresenceChange(corePresent)) {
             changed = true;
         }
 
