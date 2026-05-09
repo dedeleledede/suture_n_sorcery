@@ -6,7 +6,7 @@ import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class Suture_n_sorcery implements ModInitializer {
+public class    Suture_n_sorcery implements ModInitializer {
 
     public static final String MOD_ID = "suture_n_sorcery";
 

@@ -38,14 +38,14 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     public static final int MAX_STRINGS  = 64;
     public static final int REQUIRED_STRINGS = RitualLoomRitualHandler.minRequiredStrings();
 
-    // states
-    public static final int PHASE_IDLE          = 0; // not enough saturated strings yet
-    public static final int PHASE_SATURATING    = 1; // actively saturating one string
-    public static final int PHASE_SATURATED     = 2; // ready for core insertion (strings >= REQUIRED_STRINGS)
-    public static final int PHASE_CORE_INSERTED = 3; // core present, pressurize button visible
-    public static final int PHASE_PRESSURIZING  = 4; // holding pressurize
-    public static final int PHASE_COMPLETE      = 5; // finished this cycle (brief)
-    public static final int PHASE_FAILED        = 6; // failed this cycle (brief)
+    // synced phase ids used by screens and handlers
+    public static final int PHASE_IDLE          = RitualLoomPhase.IDLE.id();
+    public static final int PHASE_SATURATING    = RitualLoomPhase.SATURATING.id();
+    public static final int PHASE_SATURATED     = RitualLoomPhase.SATURATED.id();
+    public static final int PHASE_CORE_INSERTED = RitualLoomPhase.CORE_INSERTED.id();
+    public static final int PHASE_PRESSURIZING  = RitualLoomPhase.PRESSURIZING.id();
+    public static final int PHASE_COMPLETE      = RitualLoomPhase.COMPLETE.id();
+    public static final int PHASE_FAILED        = RitualLoomPhase.FAILED.id();
 
     // saturation tuning
     private static final int BLOOD_PER_STRING = 100;
@@ -57,7 +57,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     private int saturatedStrings = 0;
 
     // ritual progress
-    private int phase = PHASE_IDLE;
+    private RitualLoomPhase phase = RitualLoomPhase.IDLE;
     private int pressure = 0;
     private boolean pressurizing = false;
 
@@ -93,7 +93,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                 case 2 -> poleStrings;
                 case 3 -> saturatedStrings;
                 case 4 -> MAX_STRINGS;
-                case 5 -> phase;
+                case 5 -> phase.id();
                 case 6 -> saturationTicks;
                 case 7 -> pressure;
                 case 8 -> coreNonce;
@@ -109,7 +109,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                 case 0 -> bloodMl = value;
                 case 2 -> poleStrings = value;
                 case 3 -> saturatedStrings = value;
-                case 5 -> phase = value;
+                case 5 -> phase = RitualLoomPhase.fromId(value);
                 case 6 -> saturationTicks = value;
                 case 7 -> pressure = value;
                 case 8 -> coreNonce = value;
@@ -156,20 +156,20 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         boolean corePresent = !getStack(CORE_SLOT).isEmpty();
         if (!corePresent) {
             pressurizing = false;
-            if (phase == PHASE_PRESSURIZING)
-                phase = (saturatedStrings >= REQUIRED_STRINGS) ? PHASE_SATURATED : PHASE_IDLE;
+            if (phase == RitualLoomPhase.PRESSURIZING)
+                phase = idleOrSaturated(saturatedStrings);
         } else if (pressed) {
-            if (phase == PHASE_SATURATED) phase = PHASE_CORE_INSERTED;
-            if (phase != PHASE_CORE_INSERTED && phase != PHASE_PRESSURIZING) {
+            if (phase == RitualLoomPhase.SATURATED) phase = RitualLoomPhase.CORE_INSERTED;
+            if (phase != RitualLoomPhase.CORE_INSERTED && phase != RitualLoomPhase.PRESSURIZING) {
                 pressurizing = false;
                 sync();
                 return;
             }
             pressurizing = true;
-            phase = PHASE_PRESSURIZING;
+            phase = RitualLoomPhase.PRESSURIZING;
         } else {
             pressurizing = false;
-            if (phase == PHASE_PRESSURIZING) phase = PHASE_CORE_INSERTED;
+            if (phase == RitualLoomPhase.PRESSURIZING) phase = RitualLoomPhase.CORE_INSERTED;
         }
 
         sync();
@@ -178,6 +178,10 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     private void sync() {
         markDirty();
         if (world != null) world.updateListeners(pos, getCachedState(), getCachedState(), 3);
+    }
+
+    private static RitualLoomPhase idleOrSaturated(int saturatedStrings) {
+        return saturatedStrings >= REQUIRED_STRINGS ? RitualLoomPhase.SATURATED : RitualLoomPhase.IDLE;
     }
 
     // ticking
@@ -230,15 +234,14 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                 be.pressCostCarry = 0;
                 be.pressure = 0;
 
-                be.phase = PHASE_CORE_INSERTED;
+                be.phase = RitualLoomPhase.CORE_INSERTED;
             } else {
                 be.pressurizing = false;
                 be.pressTicksElapsed = 0;
                 be.pressCostCarry = 0;
                 be.pressure = 0;
 
-                int minReq = RitualLoomRitualHandler.minRequiredStrings();
-                be.phase = (be.saturatedStrings >= minReq) ? PHASE_SATURATED : PHASE_IDLE;
+                be.phase = idleOrSaturated(be.saturatedStrings);
             }
 
             changed = true;
@@ -252,19 +255,19 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         }
 
         if (!coreEmpty && !be.pressurizing && !be.coreIsOutput) {
-            if (be.phase != PHASE_CORE_INSERTED && be.phase != PHASE_FAILED) {
-                be.phase = PHASE_CORE_INSERTED;
+            if (be.phase != RitualLoomPhase.CORE_INSERTED && be.phase != RitualLoomPhase.FAILED) {
+                be.phase = RitualLoomPhase.CORE_INSERTED;
                 changed = true;
             }
         }
 
         if (coreEmpty && !be.pressurizing) {
-            if (be.phase == PHASE_CORE_INSERTED || be.phase == PHASE_PRESSURIZING) {
+            if (be.phase == RitualLoomPhase.CORE_INSERTED || be.phase == RitualLoomPhase.PRESSURIZING) {
                 be.pressure = 0;
-                be.phase = (be.saturatedStrings >= REQUIRED_STRINGS) ? PHASE_SATURATED : PHASE_IDLE;
+                be.phase = idleOrSaturated(be.saturatedStrings);
                 changed = true;
-            } else if (be.phase != PHASE_SATURATING) {
-                int desired = (be.saturatedStrings >= REQUIRED_STRINGS) ? PHASE_SATURATED : PHASE_IDLE;
+            } else if (be.phase != RitualLoomPhase.SATURATING) {
+                RitualLoomPhase desired = idleOrSaturated(be.saturatedStrings);
                 if (be.phase != desired) { be.phase = desired; changed = true; }
             }
         }
@@ -289,8 +292,8 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
             final int baseCost = BLOOD_PER_STRING / TICKS_PER_STRING;
             final int remainder = BLOOD_PER_STRING - (baseCost * TICKS_PER_STRING);
 
-            if (be.phase != PHASE_SATURATING && be.saturatedStrings < REQUIRED_STRINGS) {
-                be.phase = PHASE_SATURATING;
+            if (be.phase != RitualLoomPhase.SATURATING && be.saturatedStrings < REQUIRED_STRINGS) {
+                be.phase = RitualLoomPhase.SATURATING;
                 be.saturationTicks = 0;
                 changed = true;
             }
@@ -308,24 +311,24 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                     be.stringNonce++;
 
                     if (be.saturatedStrings >= REQUIRED_STRINGS && be.getStack(CORE_SLOT).isEmpty()) {
-                        be.phase = PHASE_SATURATED;
+                        be.phase = RitualLoomPhase.SATURATED;
                     }
                 }
                 changed = true;
 
             } else {
                 // not enough blood to keep converting
-                if (be.phase == PHASE_SATURATING) {
+                if (be.phase == RitualLoomPhase.SATURATING) {
                     be.saturationTicks = 0;
-                    be.phase = (be.saturatedStrings >= REQUIRED_STRINGS) ? PHASE_SATURATED : PHASE_IDLE;
+                    be.phase = idleOrSaturated(be.saturatedStrings);
                     changed = true;
                 }
             }
 
         } else {
             // not converting
-            if (be.phase == PHASE_SATURATING && coreEmpty) {
-                be.phase = (be.saturatedStrings >= REQUIRED_STRINGS) ? PHASE_SATURATED : PHASE_IDLE;
+            if (be.phase == RitualLoomPhase.SATURATING && coreEmpty) {
+                be.phase = idleOrSaturated(be.saturatedStrings);
                 be.saturationTicks = 0;
                 changed = true;
             }
@@ -338,8 +341,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                 be.pressCostCarry = 0;
                 be.pressure = 0;
 
-                int minReq = RitualLoomRitualHandler.minRequiredStrings();
-                be.phase = (be.saturatedStrings >= minReq) ? PHASE_SATURATED : PHASE_IDLE;
+                be.phase = idleOrSaturated(be.saturatedStrings);
                 changed = true;
 
             } else {
@@ -349,7 +351,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                     be.pressTicksElapsed = 0;
                     be.pressCostCarry = 0;
                     be.pressure = 0;
-                    be.phase = PHASE_FAILED;
+                    be.phase = RitualLoomPhase.FAILED;
                     changed = true;
 
                 } else if (be.saturatedStrings < def.requiredStrings()) {
@@ -357,7 +359,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                     be.pressTicksElapsed = 0;
                     be.pressCostCarry = 0;
                     be.pressure = 0;
-                    be.phase = PHASE_CORE_INSERTED;
+                    be.phase = RitualLoomPhase.CORE_INSERTED;
                     changed = true;
 
                 } else {
@@ -379,13 +381,13 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                         be.pressTicksElapsed = 0;
                         be.pressCostCarry = 0;
                         be.pressure = 0;
-                        be.phase = PHASE_FAILED;
+                        be.phase = RitualLoomPhase.FAILED;
 
                     } else {
                         be.bloodMl -= cost;
                         be.pressTicksElapsed++;
                         be.pressure = Math.min(MAX_PRESSURE, (be.pressTicksElapsed * MAX_PRESSURE) / totalTicks);
-                        be.phase = PHASE_PRESSURIZING;
+                        be.phase = RitualLoomPhase.PRESSURIZING;
 
                         if (be.pressTicksElapsed >= totalTicks) {
                             be.pressurizing = false;
@@ -399,7 +401,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                             be.coreIsOutput = true;
 
                             be.coreNonce++;          // FX trigger: craft complete
-                            be.phase = PHASE_COMPLETE;
+                            be.phase = RitualLoomPhase.COMPLETE;
                         }
 
                     }
@@ -408,17 +410,16 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
             }
         }
 
-        if (be.phase == PHASE_COMPLETE) {
+        if (be.phase == RitualLoomPhase.COMPLETE) {
             if (be.getStack(CORE_SLOT).isEmpty()) {
                 be.coreIsOutput = false;
-                int minReq = RitualLoomRitualHandler.minRequiredStrings();
-                int desired = (be.saturatedStrings >= minReq) ? PHASE_SATURATED : PHASE_IDLE;
+                RitualLoomPhase desired = idleOrSaturated(be.saturatedStrings);
                 if (be.phase != desired) { be.phase = desired; changed = true; }
             }
-        } else if (be.phase == PHASE_FAILED) {
-            int minReq = RitualLoomRitualHandler.minRequiredStrings();
-            int desired = (be.getStack(CORE_SLOT).isEmpty() && be.saturatedStrings >= minReq) ? PHASE_SATURATED :
-                    (be.getStack(CORE_SLOT).isEmpty() ? PHASE_IDLE : PHASE_CORE_INSERTED);
+        } else if (be.phase == RitualLoomPhase.FAILED) {
+            RitualLoomPhase desired = be.getStack(CORE_SLOT).isEmpty()
+                    ? idleOrSaturated(be.saturatedStrings)
+                    : RitualLoomPhase.CORE_INSERTED;
 
             if (be.phase != desired) {
                 be.phase = desired;
@@ -447,7 +448,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         view.putInt("BloodMl", bloodMl);
         view.putInt("PoleStrings", poleStrings);
         view.putInt("Strings", saturatedStrings);
-        view.putInt("Phase", phase);
+        view.putInt("Phase", phase.id());
         view.putInt("SaturationTicks", saturationTicks);
         view.putInt("Pressure", pressure);
         view.putInt("CoreNonce", coreNonce);
@@ -463,7 +464,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         bloodMl = view.getInt("BloodMl", 0);
         poleStrings = view.getInt("PoleStrings", 0);
         saturatedStrings = view.getInt("Strings", 0);
-        phase = view.getInt("Phase", PHASE_IDLE);
+        phase = RitualLoomPhase.fromId(view.getInt("Phase", PHASE_IDLE));
         saturationTicks = view.getInt("SaturationTicks", 0);
         pressure = view.getInt("Pressure", 0);
         coreNonce = view.getInt("CoreNonce", 0);
@@ -519,7 +520,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     @Override
     public boolean canExtract(int slot, ItemStack stack, Direction dir) {
         // lock the core during pressurize
-        if (slot == CORE_SLOT) return phase != PHASE_PRESSURIZING;
+        if (slot == CORE_SLOT) return phase != RitualLoomPhase.PRESSURIZING;
         return true;
     }
 }
