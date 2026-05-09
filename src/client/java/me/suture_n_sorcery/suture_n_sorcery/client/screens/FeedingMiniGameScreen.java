@@ -11,26 +11,25 @@ import java.util.Arrays;
 import java.util.Random;
 
 public final class FeedingMiniGameScreen extends Screen {
-    // Rope shape / feel
-    private static final int NODES = 65;          // more = smoother curves
-    private static final float SEG_LEN = 4.0f;    // px per segment => total length ~ (NODES-1)*SEG_LEN
-    private static final int SOLVER_ITERS = 6;    // constraint iterations per frame
-    private static final float DAMPING = 0.92f;   // 0..1 (lower = more “sticky”)
-    // 0..1 (higher = less lag)
-    private static final float BOB_R = 4.0f; // bob collision radius vs obstacles
+    // rope shape and feel
+    private static final int NODES = 65;
+    private static final float SEG_LEN = 4.0f;
+    private static final int SOLVER_ITERS = 6;
+    private static final float DAMPING = 0.92f;
+    private static final float BOB_R = 4.0f;
 
     private final boolean[] segLeftHit  = new boolean[CUT_SEGMENTS];
     private final boolean[] segRightHit = new boolean[CUT_SEGMENTS];
 
-    private static final float PULL_RESERVE = 40.0f; // px reserved just to pull tight at the end
+    private static final float PULL_RESERVE = 40.0f;
 
-    // ---- Wound (Option C) ----
-    private static final float CUT_ZONE_R = 100.0f;      // stay within 100px of center
-    private static final int   CUT_SEGMENTS = 9;         // number of stitchable sections
-    private static final float CUT_STEP = 18.0f;         // spacing between sections
-    private static final float CUT_BASE_GAP = 26.0f;     // initial gap between edges
-    private static final float EDGE_JITTER = 6.0f;       // jaggedness
-    private static final float HOOK_R = 9.0f;            // how close bob must be to hook
+    // wound layout
+    private static final float CUT_ZONE_R = 100.0f;
+    private static final int   CUT_SEGMENTS = 9;
+    private static final float CUT_STEP = 18.0f;
+    private static final float CUT_BASE_GAP = 26.0f;
+    private static final float EDGE_JITTER = 6.0f;
+    private static final float HOOK_R = 9.0f;
 
     private static final float MISS_PENALTY = 10.0f;
 
@@ -40,17 +39,17 @@ public final class FeedingMiniGameScreen extends Screen {
 
     private final ArrayList<StitchPoint> stitchPath = new ArrayList<>();
 
-    // base edge offsets (jagged)
+    // base edge offsets
     private final float[] leftOffX = new float[CUT_SEGMENTS];
     private final float[] leftOffY = new float[CUT_SEGMENTS];
     private final float[] rightOffX = new float[CUT_SEGMENTS];
     private final float[] rightOffY = new float[CUT_SEGMENTS];
 
-    // 0..1 closure per segment
+    // wound closure per segment
     private final float[] closeT = new float[CUT_SEGMENTS];
 
-    private float endLockSX, endLockSY; // lerp start
-    // Render
+    private float endLockSX, endLockSY;
+    // render colors
     private static final float ROPE_THICK = 0.3f;
     private static final int ROPE_COLOR = 0xFFB12900;
     private static final int BOB_COLOR  = 0xFF66CCFF;
@@ -58,27 +57,27 @@ public final class FeedingMiniGameScreen extends Screen {
     private static final int HIT_BALL_COLOR = 0xFF22FF66;
     private static final int HIT_BALL_R = 4;
 
-    private int freeSegCurrent = NODES - 1; // how many segments are "free" (usable)
+    private int freeSegCurrent = NODES - 1;
     private int freeSegTarget  = NODES - 1;
 
     private int computeFreeSegTarget() {
         return Math.max(0, Math.min(NODES - 1, (int) (remainingThread() / SEG_LEN)));
     }
 
-    private static final float ROPE_MAX = (NODES - 1) * SEG_LEN; // physical rope capacity
-    private static final float THREAD_MARGIN = 1.35f;            // allow some waste/misses
+    private static final float ROPE_MAX = (NODES - 1) * SEG_LEN;
+    private static final float THREAD_MARGIN = 1.35f;
 
     private int ropeEndSeg = -1;
     private int ropeEndSide = -1;
 
-    private float threadMax = ROPE_MAX; // computed per generated cut
+    private float threadMax = ROPE_MAX;
     private float usedThread = 0.0f;
-    private float endLockX, endLockY;     // current constraint point for rope end
-    private float endLockTX, endLockTY;   // target constraint (last anchor)
-    private float endLockAlpha = 1.0f;    // 0..1 transition progress
-    private static final float END_LOCK_SPEED = 0.25f; // how fast it threads to the new anchor
+    private float endLockX, endLockY;
+    private float endLockTX, endLockTY;
+    private float endLockAlpha = 1.0f;
+    private static final float END_LOCK_SPEED = 0.25f;
 
-    private float lastStitchDrawT = 1.0f; // 0..1 progress for newest segment
+    private float lastStitchDrawT = 1.0f;
 
     private final ArrayList<Anchor> anchorMarks = new ArrayList<>();
 
@@ -86,18 +85,15 @@ public final class FeedingMiniGameScreen extends Screen {
         return Math.max(0.0f, threadMax - usedThread);
     }
 
-    // “Threading” behavior
-    // how much stretch imbalance before shifting pin
-
     private final Screen parent;
 
-    // Rope node positions + previous positions (verlet)
+    // rope node positions and previous positions for verlet physics
     private final float[] x = new float[NODES];
     private final float[] y = new float[NODES];
     private final float[] px = new float[NODES];
     private final float[] py = new float[NODES];
 
-    // Bob (node 0 is forced to bob position)
+    // the bob drives node zero
     private float bobX, bobY;
     private float targetX, targetY;
 
@@ -111,49 +107,55 @@ public final class FeedingMiniGameScreen extends Screen {
     private static final float TIMING_WINDOW = 2.0f;
     private boolean chainMode = false;
 
-    // --- Hematic stage -> nub budget ---
-    private int hematicPct = 0;     // 0..99 (or 0..100)
-    private int stageIndex = 0;     // 0,1,2
-    private int stageNubs = 6;      // 6 / 12 / 18
+    // hematic stage controls how many stitch targets are required
+    private static final int STAGE_ONE_MAX_PCT = 33;
+    private static final int STAGE_TWO_MAX_PCT = 66;
+    private static final int STAGE_ONE_NUBS = 6;
+    private static final int STAGE_TWO_NUBS = 12;
+    private static final int STAGE_THREE_NUBS = 18;
+
+    private int hematicPct = 0;
+    private int stageIndex = 0;
+    private int stageNubs = STAGE_ONE_NUBS;
 
     private int hitFlashTicks = 0;
     private int missFlashTicks = 0;
     private float flashX = 0, flashY = 0;
 
     private static final int FLASH_TICKS = 10;
-    private static final float ARM_DIST = HOOK_R * 1.9f;   // must get this close to start timer
-    private static final float HOLD_DIST = HOOK_R * 2.4f;  // if you leave beyond this, pause timer
+    private static final float ARM_DIST = HOOK_R * 1.9f;
+    private static final float HOLD_DIST = HOOK_R * 2.4f;
 
     // current required target after the run starts
-    private int zigSeg = CUT_SEGMENTS - 1; // starts at bottom
-    private int zigSide = 0;               // will be set by first click (0 left / 1 right)
+    private int zigSeg = CUT_SEGMENTS - 1;
+    private int zigSide = 0;
 
-    // when true, timing circle is allowed to be shown
+    // when true, the timing circle is allowed to appear
     private boolean timingEnabled = false;
 
-    // --- Nub queue (deterministic zigzag) ---
-    private record Nub(int seg, int side) {} // side: 0=left, 1=right
+    // deterministic target queue
+    private record Nub(int seg, int side) {}
     private final ArrayList<Nub> nubSeq = new ArrayList<>();
     private int nubIndex = 0;
 
-    // States
+    // stitch state
     private enum SutState { STITCHING, PULL_TO_CLOSE, CLOSING, DONE }
     private SutState sutState = SutState.STITCHING;
 
     private boolean timingArmed = true;
     private int timingTicks = TIMING_TOTAL;
-    // Close animation
-    private float closeAnimT = 0.0f; // 0..1
-    private static final float PULL_START_TENSION = 0.92f;  // how taut to start closing
-    private static final float CLOSE_SPEED = 0.06f;         // per tick at full tension
+    // close animation
+    private float closeAnimT = 0.0f;
+    private static final float PULL_START_TENSION = 0.92f;
+    private static final float CLOSE_SPEED = 0.06f;
 
     private boolean sentResult = false;
-    private int catalystHandOrdinal = 0; // 0 main, 1 off (set this when you open the screen)
+    private int catalystHandOrdinal = 0;
 
-    // Anchors (each anchor is a fixed point + a pinned node index that can “thread”)
+    // anchors pin parts of the rope while the free end moves
     private final ArrayList<Anchor> anchors = new ArrayList<>();
 
-    private record Anchor(float ax, float ay, int pinIndex) {} // pinIndex slides along the rope
+    private record Anchor(float ax, float ay, int pinIndex) {}
     private record Obstacle(float x, float y, float r) {}
     private record StitchPoint(float x, float y, int side, int seg, boolean hit) {}
 
@@ -172,7 +174,7 @@ public final class FeedingMiniGameScreen extends Screen {
         int newStage = stageFromPct(hematicPct);
         if (newStage != stageIndex) {
             stageIndex = newStage;
-            stageNubs = (stageIndex == 0) ? 6 : (stageIndex == 1) ? 12 : 18;
+            stageNubs = nubsForStage(stageIndex);
 
             buildNubSequence();
             recomputeThreadBudgetForCut();
@@ -182,13 +184,32 @@ public final class FeedingMiniGameScreen extends Screen {
     }
 
     private int stageFromPct(int pct) {
-        if (pct <= 33) return 0;     // Stage 1
-        if (pct <= 66) return 1;     // Stage 2
-        return 2;                    // Stage 3 (67..99)
+        if (pct <= STAGE_ONE_MAX_PCT) return 0;
+        if (pct <= STAGE_TWO_MAX_PCT) return 1;
+        return 2;
+    }
+
+    private int nubsForStage(int stage) {
+        if (stage == 0) return STAGE_ONE_NUBS;
+        if (stage == 1) return STAGE_TWO_NUBS;
+        return STAGE_THREE_NUBS;
     }
 
     @Override
     protected void init() {
+        resetCollections();
+        resetTimingState();
+        resetBobState();
+        resetRopeState();
+
+        generateCut();
+        setHematicPct(hematicPct);
+        buildNubSequence();
+        recomputeThreadBudgetForCut();
+        syncTargetFromNubIndex();
+    }
+
+    private void resetCollections() {
         anchors.clear();
         anchorMarks.clear();
         stitchPath.clear();
@@ -196,7 +217,9 @@ public final class FeedingMiniGameScreen extends Screen {
 
         Arrays.fill(segLeftHit, false);
         Arrays.fill(segRightHit, false);
+    }
 
+    private void resetTimingState() {
         timingEnabled = false;
         timingActive = false;
         timingArmed = false;
@@ -209,7 +232,9 @@ public final class FeedingMiniGameScreen extends Screen {
 
         zigSeg = CUT_SEGMENTS - 1;
         zigSide = 0;
+    }
 
+    private void resetBobState() {
         bobX = this.width * 0.5f;
         bobY = this.height * 0.5f;
         targetX = bobX;
@@ -221,7 +246,9 @@ public final class FeedingMiniGameScreen extends Screen {
             x[i] = px[i] = ix;
             y[i] = py[i] = iy;
         }
+    }
 
+    private void resetRopeState() {
         endLockX = x[NODES - 1];
         endLockY = y[NODES - 1];
         endLockTX = endLockX;
@@ -233,19 +260,13 @@ public final class FeedingMiniGameScreen extends Screen {
         usedThread = 0.0f;
         freeSegCurrent = freeSegTarget = NODES - 1;
         lastStitchDrawT = 1.0f;
-
-        generateCut();
-        setHematicPct(hematicPct); // if hematicPct is already set externally
-        buildNubSequence();
-        recomputeThreadBudgetForCut();
-        syncTargetFromNubIndex();
     }
 
     @Override
     public boolean keyPressed(net.minecraft.client.input.KeyInput input) {
         if (input.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_H) {
             obstacles.add(new Obstacle(targetX, targetY, 18.0f));
-            return true; // consumed
+            return true;
         }
         return super.keyPressed(input);
     }
@@ -275,65 +296,46 @@ public final class FeedingMiniGameScreen extends Screen {
 
         boolean inRange = dist(bobX, bobY, tx, ty) <= HOOK_R;
 
-        // If you clicked OUTSIDE the nub circle: do NOT skip.
         if (!inRange) {
-            // If you still want early clicks to waste thread, keep this:
             if (!spendThreadOnMiss()) {
                 enterPullToClose();
             }
 
-            // Visual feedback (optional)
-            missFlashTicks = FLASH_TICKS;
-            flashX = tx;
-            flashY = ty;
+            flashMiss(tx, ty);
 
             return true;
         }
 
-        // From here: click is INSIDE the nub circle
         boolean ok = timingActive && timingSuccess();
 
         if (!ok) {
-            // Wrong timing (or early) INSIDE the circle => waste thread AND advance
             if (!spendThreadOnMiss()) {
                 enterPullToClose();
                 return true;
             }
 
-            missFlashTicks = FLASH_TICKS;
-            flashX = tx;
-            flashY = ty;
+            flashMiss(tx, ty);
 
             nubIndex++;
             syncTargetFromNubIndex();
 
             if (nubIndex >= nubSeq.size()) {
-                sutState = SutState.PULL_TO_CLOSE;
-                timingEnabled = false;
-                timingActive = false;
-                timingArmed = false;
+                enterPullStateWithoutTiming();
                 return true;
             }
 
-            if (!chainMode) chainMode = true;
-
-            timingActive = true;
-            timingArmed = false;
-            timingTicks = TIMING_TOTAL;
+            startChainTiming();
 
             return true;
         }
 
-        // Success => place stitch point
         boolean placed = registerAttemptPoint(n.seg, n.side, true);
         if (!placed) {
             enterPullToClose();
             return true;
         }
 
-        hitFlashTicks = FLASH_TICKS;
-        flashX = tx;
-        flashY = ty;
+        flashHit(tx, ty);
 
         if (n.side == 0) segLeftHit[n.seg] = true;
         else segRightHit[n.seg] = true;
@@ -341,44 +343,59 @@ public final class FeedingMiniGameScreen extends Screen {
         nubIndex++;
         syncTargetFromNubIndex();
 
-        if (!chainMode) chainMode = true;
-
         if (nubIndex >= nubSeq.size()) {
-            sutState = SutState.PULL_TO_CLOSE;
-            timingEnabled = false;
-            timingActive = false;
-            timingArmed = false;
+            enterPullStateWithoutTiming();
             return true;
         }
 
-        timingActive = true;
-        timingArmed = false;
-        timingTicks = TIMING_TOTAL;
+        startChainTiming();
 
         return true;
     }
 
+    private void flashMiss(float x, float y) {
+        missFlashTicks = FLASH_TICKS;
+        flashX = x;
+        flashY = y;
+    }
+
+    private void flashHit(float x, float y) {
+        hitFlashTicks = FLASH_TICKS;
+        flashX = x;
+        flashY = y;
+    }
+
+    private void startChainTiming() {
+        if (!chainMode) chainMode = true;
+
+        timingActive = true;
+        timingArmed = false;
+        timingTicks = TIMING_TOTAL;
+    }
+
+    private void enterPullStateWithoutTiming() {
+        sutState = SutState.PULL_TO_CLOSE;
+        timingEnabled = false;
+        timingActive = false;
+        timingArmed = false;
+    }
+
     private void drawTargetAndFeedback(DrawContext ctx) {
-        // Target marker (always visible after start)
         if (timingEnabled && zigSeg >= 0) {
-            // fixed "hit ring" (what you want the shrinking ring to match)
             drawCircle(ctx, timingX, timingY, TIMING_TARGET_R, 0x6600FF00);
 
-            // slack band (visualize window)
             drawCircle(ctx, timingX, timingY, TIMING_TARGET_R + TIMING_WINDOW, 0x2200FF00);
             drawCircle(ctx, timingX, timingY, Math.max(1.0f, TIMING_TARGET_R - TIMING_WINDOW), 0x2200FF00);
 
             if (timingActive) drawTiming(ctx);
         }
 
-        // Hit flash (green)
         if (hitFlashTicks > 0) {
             float a = hitFlashTicks / (float) FLASH_TICKS;
             int col = ( ((int)(a * 200) & 255) << 24) | 0x0000FF00;
             drawCircle(ctx, flashX, flashY, 14.0f, col);
         }
 
-        // Miss flash (red)
         if (missFlashTicks > 0) {
             float a = missFlashTicks / (float) FLASH_TICKS;
             int col = ( ((int)(a * 180) & 255) << 24) | 0x00FF2222;
@@ -390,36 +407,13 @@ public final class FeedingMiniGameScreen extends Screen {
     public void tick() {
         super.tick();
 
-        if (lastStitchDrawT < 1.0f) {
-            lastStitchDrawT = Math.min(1.0f, lastStitchDrawT + 0.25f);
-        }
+        tickSmallAnimations();
 
-        if (hitFlashTicks > 0) hitFlashTicks--;
-        if (missFlashTicks > 0) missFlashTicks--;
-
-        // Closing anim update
         if (sutState == SutState.CLOSING) {
-            float tension = computePullTension();
-            closeAnimT = Math.min(1.0f, closeAnimT + CLOSE_SPEED * Math.max(0.35f, tension));
-
-            float t = closeAnimT;
-            t = t * t * (3.0f - 2.0f * t); // smoothstep
-
-            for (int i = 0; i < CUT_SEGMENTS; i++) {
-                // ✅ only segments stitched on BOTH sides close
-                closeT[i] = (segLeftHit[i] && segRightHit[i]) ? t : 0.0f;
-                syncRopeEndToClosingEdge();
-            }
-
-            if (closeAnimT >= 1.0f) {
-                sutState = SutState.DONE;
-
-                // success = you stitched every required nub
-                sendResult(stitchPath.size() >= nubSeq.size());
-            }
+            tickClosingAnimation();
             return;
         }
-        // Stitching timing
+
         if (sutState != SutState.STITCHING) return;
         if (nubIndex < 0 || nubIndex >= nubSeq.size()) return;
 
@@ -428,44 +422,71 @@ public final class FeedingMiniGameScreen extends Screen {
         timingY = edgeY(n.seg, n.side);
 
         if (!chainMode) {
-            // Pre-chain: old behavior (only starts when you approach)
-            float dToTarget = dist(bobX, bobY, timingX, timingY);
+            tickPreChainTiming();
+            return;
+        }
 
-            if (timingArmed && !timingActive) {
-                if (dToTarget <= ARM_DIST) {
-                    timingActive = true;
-                    timingTicks = TIMING_TOTAL;
-                }
-                return;
-            }
+        tickChainTiming();
+    }
 
-            if (timingActive && dToTarget > HOLD_DIST) {
-                timingActive = false;
-                timingArmed = true;
+    private void tickSmallAnimations() {
+        if (lastStitchDrawT < 1.0f) {
+            lastStitchDrawT = Math.min(1.0f, lastStitchDrawT + 0.25f);
+        }
+
+        if (hitFlashTicks > 0) hitFlashTicks--;
+        if (missFlashTicks > 0) missFlashTicks--;
+    }
+
+    private void tickClosingAnimation() {
+        float tension = computePullTension();
+        closeAnimT = Math.min(1.0f, closeAnimT + CLOSE_SPEED * Math.max(0.35f, tension));
+
+        float t = smoothstep(closeAnimT);
+
+        for (int i = 0; i < CUT_SEGMENTS; i++) {
+            closeT[i] = (segLeftHit[i] && segRightHit[i]) ? t : 0.0f;
+            syncRopeEndToClosingEdge();
+        }
+
+        if (closeAnimT >= 1.0f) {
+            sutState = SutState.DONE;
+            sendResult(stitchPath.size() >= nubSeq.size());
+        }
+    }
+
+    private void tickPreChainTiming() {
+        float dToTarget = dist(bobX, bobY, timingX, timingY);
+
+        if (timingArmed && !timingActive) {
+            if (dToTarget <= ARM_DIST) {
+                timingActive = true;
                 timingTicks = TIMING_TOTAL;
-                return;
-            }
-
-            if (timingActive) {
-                timingTicks--;
-                if (timingTicks <= 0) {
-                    // miss (no anchor), just reset
-                    spendThreadOnMiss();
-
-                    missFlashTicks = FLASH_TICKS;
-                    flashX = timingX;
-                    flashY = timingY;
-
-                    timingActive = false;
-                    timingArmed = true;
-                    timingTicks = TIMING_TOTAL;
-                }
             }
             return;
         }
 
-        // Chain mode: timer ALWAYS runs, regardless of mouse position.
-        // If it expires => advance to next nub, no anchor added.
+        if (timingActive && dToTarget > HOLD_DIST) {
+            timingActive = false;
+            timingArmed = true;
+            timingTicks = TIMING_TOTAL;
+            return;
+        }
+
+        if (timingActive) {
+            timingTicks--;
+            if (timingTicks <= 0) {
+                spendThreadOnMiss();
+                flashMiss(timingX, timingY);
+
+                timingActive = false;
+                timingArmed = true;
+                timingTicks = TIMING_TOTAL;
+            }
+        }
+    }
+
+    private void tickChainTiming() {
         if (!timingActive) {
             timingActive = true;
             timingTicks = TIMING_TOTAL;
@@ -475,18 +496,13 @@ public final class FeedingMiniGameScreen extends Screen {
         if (timingTicks <= 0) {
             spendThreadOnMiss();
 
-            missFlashTicks = FLASH_TICKS;
-            flashX = timingX;
-            flashY = timingY;
+            flashMiss(timingX, timingY);
 
             nubIndex++;
             syncTargetFromNubIndex();
 
             if (nubIndex >= nubSeq.size()) {
-                sutState = SutState.PULL_TO_CLOSE;
-                timingEnabled = false;
-                timingActive = false;
-                timingArmed = false;
+                enterPullStateWithoutTiming();
                 return;
             }
 
@@ -509,7 +525,7 @@ public final class FeedingMiniGameScreen extends Screen {
             float nx = edgeX(n.seg, n.side);
             float ny = edgeY(n.seg, n.side);
 
-            // match spendThreadForNewPoint(): dist + 2.0f :contentReference[oaicite:6]{index=6}
+            // keep this matched with spendThreadForNewPoint
             sum += dist(px0, py0, nx, ny) + 2.0f;
 
             px0 = nx;
@@ -524,12 +540,11 @@ public final class FeedingMiniGameScreen extends Screen {
         nubIndex = 0;
         sutState = SutState.STITCHING;
 
-        // stageNubs is 6/12/18 -> segmentsToUse is 3/6/9
+        // each segment needs one left and one right target
         int segmentsToUse = Math.max(1, Math.min(CUT_SEGMENTS, stageNubs / 2));
 
-        // choose a consistent order to avoid “square” vertical hops:
-        // L(seg) -> R(seg) -> L(seg-1) -> R(seg-1) ...
-        int firstSide = 0; // 0 = left first. set 1 if you want right first
+        // zigzag order avoids vertical jumps between matching edges
+        int firstSide = 0;
 
         int startSeg = CUT_SEGMENTS - 1;
         int endSeg = CUT_SEGMENTS - segmentsToUse;
@@ -570,22 +585,35 @@ public final class FeedingMiniGameScreen extends Screen {
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        updateTargetFromMouse(mouseX, mouseY);
+
+        ctx.fill(0, 0, this.width, this.height, 0xAA000000);
+
+        updateBobAndRope();
+        updatePullToCloseState();
+
+        drawPlayfield(ctx);
+
+        super.render(ctx, mouseX, mouseY, delta);
+    }
+
+    private void updateTargetFromMouse(int mouseX, int mouseY) {
         targetX = mouseX + 0.5f;
         targetY = mouseY + 0.5f;
 
         float[] t = pushOutOfObstacles(targetX, targetY, BOB_R);
         targetX = t[0];
         targetY = t[1];
+    }
 
-        ctx.fill(0, 0, this.width, this.height, 0xAA000000);
-
+    private void updateBobAndRope() {
         updateBob();
 
         float[] p = pushOutOfObstacles(bobX, bobY, BOB_R);
         bobX = p[0];
         bobY = p[1];
 
-        // ✅ clamp BEFORE rope sim so rope uses the same bob position you draw
+        // clamp before rope sim so drawing and physics use the same bob position
         clampBobIfTaut();
         p = pushOutOfObstacles(bobX, bobY, BOB_R);
         bobX = p[0];
@@ -594,7 +622,9 @@ public final class FeedingMiniGameScreen extends Screen {
         // keep marker glued to current nub
         syncTargetFromNubIndex();
         stepRopePhysics();
+    }
 
+    private void updatePullToCloseState() {
         if (sutState == SutState.PULL_TO_CLOSE) {
             if (hasAnyStitchedSegment()) {
                 float tension = computePullTension();
@@ -604,10 +634,12 @@ public final class FeedingMiniGameScreen extends Screen {
                 }
             }
         }
+    }
 
+    private void drawPlayfield(DrawContext ctx) {
         drawCut(ctx);
-        drawTargetAndFeedback(ctx); // move this ABOVE
-        drawStitchPath(ctx);        // so stitches render on top
+        drawTargetAndFeedback(ctx);
+        drawStitchPath(ctx);
 
         drawTargetAndFeedback(ctx);
         drawClosureMeter(ctx);
@@ -615,8 +647,6 @@ public final class FeedingMiniGameScreen extends Screen {
         drawRope(ctx);
         drawMarkers(ctx);
         drawStringLeftMeter(ctx);
-
-        super.render(ctx, mouseX, mouseY, delta);
     }
 
     private boolean timingSuccess() {
@@ -659,17 +689,17 @@ public final class FeedingMiniGameScreen extends Screen {
 
     private void enterPullToClose() {
         if (sutState != SutState.STITCHING) return;
-        if (hasAnyStitchedSegment()) return; // nothing to tighten yet
+        if (hasAnyStitchedSegment()) return;
 
         sutState = SutState.PULL_TO_CLOSE;
 
-        // stop timing/targets
+        // pull mode no longer needs active timing targets
         timingEnabled = false;
         timingActive = false;
         timingArmed = false;
         zigSeg = -1;
 
-        // guarantee some slack for the "pull" gesture
+        // guarantee some slack for the pull gesture
         float rem = threadMax - usedThread;
         if (rem < PULL_RESERVE) {
             threadMax = usedThread + PULL_RESERVE;
@@ -684,7 +714,7 @@ public final class FeedingMiniGameScreen extends Screen {
         float max = Math.max(remainingThread(), 0.0001f);
         float d = dist(bobX, bobY, last.ax, last.ay);
 
-        return clamp01(d / max); // 1.0 when fully taut
+        return clamp01(d / max);
     }
 
     private float bobLagFactor() {
@@ -709,7 +739,7 @@ public final class FeedingMiniGameScreen extends Screen {
         StitchPoint last = stitchPath.get(stitchPath.size() - 1);
         float cost = dist(last.x, last.y, nx, ny);
 
-        // optional: add a small constant per stitch (knot/handling cost)
+        // each stitch costs a little handling slack beyond raw distance
         cost += 2.0f;
 
         if (usedThread + cost > threadMax) return false;
@@ -736,20 +766,20 @@ public final class FeedingMiniGameScreen extends Screen {
 
         freeSegTarget = computeFreeSegTarget();
 
-        // ✅ lock tail instantly to the new stitch point
+        // lock the tail instantly to the new stitch point
         endLockX = endLockTX = ax;
         endLockY = endLockTY = ay;
         endLockSX = ax;
         endLockSY = ay;
         endLockAlpha = 1.0f;
 
-        // ✅ hard-pin the simulated tail node too (prevents drift / “not fixed” look)
+        // hard-pin the simulated tail node so the stitch does not drift
         x[NODES - 1] = px[NODES - 1] = ax;
         y[NODES - 1] = py[NODES - 1] = ay;
     }
 
     private void drawCut(DrawContext ctx) {
-        // draw edges as little “nodes” + connecting strips
+        // draw edges as nodules and connecting strips
         int edgeCol = 0xFFAA3333;
         int seamCol = 0x66330000;
 
@@ -824,8 +854,8 @@ public final class FeedingMiniGameScreen extends Screen {
         ropeEndSeg = seg;
         ropeEndSide = side;
 
-        if (!spendThreadForNewPoint(ex, ey)) {  // :contentReference[oaicite:4]{index=4}
-            enterPullToClose();                 // ✅ instead of “nothing happens”
+        if (!spendThreadForNewPoint(ex, ey)) {
+            enterPullToClose();
             return false;
         }
 
@@ -879,7 +909,7 @@ public final class FeedingMiniGameScreen extends Screen {
         float cx = this.width * 0.5f;
         float cy = this.height * 0.5f;
 
-        // Place the cut vertically-ish and keep it within 100px of center
+        // place the cut near the center with a slight handmade wobble
         float totalLen = (CUT_SEGMENTS - 1) * CUT_STEP;
         float y0 = cy - totalLen * 0.5f;
 
@@ -908,9 +938,9 @@ public final class FeedingMiniGameScreen extends Screen {
         float x = seamX[seg];
 
         float base;
-        if (side == 0) { // left
+        if (side == 0) {
             base = x + leftOffX[seg];
-        } else {         // right
+        } else {
             base = x + rightOffX[seg];
         }
         return lerp(base, x, t);
@@ -926,29 +956,33 @@ public final class FeedingMiniGameScreen extends Screen {
         } else {
             base = y + rightOffY[seg];
         }
-        return lerp(base, y, t * 0.35f);  // y closes less than x (looks more natural)
+        return lerp(base, y, t * 0.35f);
     }
 
     private static float lerp(float a, float b, float t) {
         return a + (b - a) * t;
     }
 
+    private static float smoothstep(float t) {
+        return t * t * (3.0f - 2.0f * t);
+    }
+
     private void stepRopePhysics() {
-        // Decide whether we are currently "threading" into a new stitch
+        // threading keeps the rope long while it slides into a new stitch
         boolean stitched = !anchors.isEmpty();
         boolean threading = stitched && (endLockAlpha < 1.0f);
 
-        // During threading: keep full rope length so it slides smoothly (no snapping)
+        // during threading, keep full rope length so it slides smoothly
         int activeSeg = stitched
                 ? (threading ? (NODES - 1) : freeSegCurrent)
                 : (NODES - 1);
 
-        // --- Smooth end lock (only when stitched) ---
+        // smooth the tail into each stitched anchor
         if (stitched) {
             if (endLockAlpha < 1.0f) {
                 endLockAlpha = Math.min(1.0f, endLockAlpha + END_LOCK_SPEED);
                 float t = endLockAlpha;
-                t = t * t * (3.0f - 2.0f * t); // smoothstep
+                t = smoothstep(t);
                 endLockX = endLockSX + (endLockTX - endLockSX) * t;
                 endLockY = endLockSY + (endLockTY - endLockSY) * t;
             } else {
@@ -957,7 +991,7 @@ public final class FeedingMiniGameScreen extends Screen {
             }
         }
 
-        // --- Verlet integration ---
+        // verlet integration
         x[0] = bobX; y[0] = bobY;
         px[0] = bobX; py[0] = bobY;
 
@@ -970,7 +1004,7 @@ public final class FeedingMiniGameScreen extends Screen {
             y[i] += vy;
         }
 
-        // Only start consuming/collapsing segments AFTER threading finishes
+        // only collapse segments after the visual threading finishes
         if (stitched && !threading) {
             if (freeSegCurrent > freeSegTarget) freeSegCurrent--;
         }
@@ -979,11 +1013,11 @@ public final class FeedingMiniGameScreen extends Screen {
         int endIndex = NODES - 1;
 
         for (int iter = 0; iter < iters; iter++) {
-            // hard pin bob
+            // hard-pin bob
             x[0] = bobX; y[0] = bobY;
             px[0] = bobX; py[0] = bobY;
 
-            // hard pin stitched end (always same index)
+            // hard-pin stitched end
             if (stitched) {
                 x[endIndex] = endLockX;
                 y[endIndex] = endLockY;
@@ -998,9 +1032,7 @@ public final class FeedingMiniGameScreen extends Screen {
                 py[NODES - 1] = endLockY;
             }
 
-            // segment constraints:
-            // - during threading: all segments SEG_LEN
-            // - after threading: segments after activeSeg collapse to 0
+            // after threading, segments past the active length collapse to zero
             for (int i = 0; i < NODES - 1; i++) {
                 float len = (i < activeSeg) ? SEG_LEN : 0.0f;
 
@@ -1056,7 +1088,7 @@ public final class FeedingMiniGameScreen extends Screen {
     private void recomputeThreadBudgetForCut() {
         float req = estimateNubSeqRequired();
 
-        // Set max thread to exactly what the stitches need (plus margin)
+        // set max thread from the generated target path
         threadMax = req * THREAD_MARGIN;
         usedThread = 0.0f;
 
@@ -1067,18 +1099,18 @@ public final class FeedingMiniGameScreen extends Screen {
         if (obstacles.isEmpty()) return;
         freeSeg = Math.max(0, Math.min(NODES - 1, freeSeg));
 
-        int maxNode = Math.min(NODES - 1, freeSeg + 1); // nodes 0..freeSeg+1 can influence the visible rope
+        int maxNode = Math.min(NODES - 1, freeSeg + 1);
         int endPinned = (!anchors.isEmpty()) ? (NODES - 1) : -999;
 
-        // push nodes out (skip bob and pinned end; they’re handled elsewhere)
+        // push free rope nodes out of obstacles
         for (int i = 1; i <= maxNode; i++) {
             if (i == endPinned) continue;
-            float[] p = pushOutOfObstacles(x[i], y[i], ROPE_THICK * 0.5f); // include rope thickness
+            float[] p = pushOutOfObstacles(x[i], y[i], ROPE_THICK * 0.5f);
             x[i] = p[0];
             y[i] = p[1];
         }
 
-        // segment collision only for visible/free part
+        // collide only the visible free rope
         for (Obstacle ob : obstacles) {
             float cx = ob.x, cy = ob.y;
             float r = ob.r + ROPE_THICK * 0.5f;
@@ -1135,10 +1167,10 @@ public final class FeedingMiniGameScreen extends Screen {
         float d = (float) Math.sqrt(d2);
         float diff = (d - len) / d;
 
-        // both pinned => nothing to do
+        // both pinned means there is nothing to solve
         if (aPinned && bPinned) return;
 
-        // If one side is pinned, push all correction into the other side.
+        // if one side is pinned, push all correction into the other side
         float wa = 0.5f;
         float wb = 0.5f;
         if (aPinned) { wa = 0.0f; wb = 1.0f; }
@@ -1159,7 +1191,7 @@ public final class FeedingMiniGameScreen extends Screen {
 
             if (d2 < rr * rr) {
                 if (d2 < 0.000001f) {
-                    // degenerate: shove upward
+                    // degenerate case gets a small upward push
                     py = ob.y - rr;
                     continue;
                 }
@@ -1189,7 +1221,7 @@ public final class FeedingMiniGameScreen extends Screen {
         }
     }
 
-    // -------- Rendering --------
+    // rendering
 
     private void drawRope(DrawContext ctx) {
         boolean stitched = !anchors.isEmpty();
@@ -1204,7 +1236,7 @@ public final class FeedingMiniGameScreen extends Screen {
     }
 
     private void drawMarkers(DrawContext ctx) {
-        // Anchors = stitch points (these can move with closeT)
+        // anchors are stitch points and can move with closeT
         for (StitchPoint sp : stitchPath) {
             float ax = stitchPX(sp);
             float ay = stitchPY(sp);
@@ -1213,7 +1245,7 @@ public final class FeedingMiniGameScreen extends Screen {
             ctx.fill(ix - 2, iy - 2, ix + 3, iy + 3, ANC_COLOR);
         }
 
-        // Bob
+        // bob
         int bx = (int) bobX;
         int by = (int) bobY;
         ctx.fill(bx - 3, by - 3, bx + 4, by + 4, BOB_COLOR);
@@ -1238,7 +1270,7 @@ public final class FeedingMiniGameScreen extends Screen {
         float total = threadMax;
         float left = remainingThread();
 
-        // tension: how close we are to taut (0 = slack, 1 = fully taut)
+        // tension shows how close the rope is to taut
         float tension = 0.0f;
         if (!anchors.isEmpty()) {
             Anchor last = anchors.get(anchors.size() - 1);
@@ -1251,7 +1283,7 @@ public final class FeedingMiniGameScreen extends Screen {
         int w = 110, h = 8;
         int gap = 10;
 
-        // Bar 1: thread left (ratio)
+        // thread left
         float leftRatio = clamp01(left / total);
 
         ctx.fill(x0 - 1, y0 - 1, x0 + w + 1, y0 + h + 1, 0xFF111111);
@@ -1263,7 +1295,7 @@ public final class FeedingMiniGameScreen extends Screen {
                 x0, y0 + h + 2, 0xFFFFFFFF, true
         );
 
-        // Bar 2: tension
+        // tension
         int y1 = y0 + h + gap + 10;
         ctx.fill(x0 - 1, y1 - 1, x0 + w + 1, y1 + h + 1, 0xFF111111);
         ctx.fill(x0, y1, x0 + w, y1 + h, 0xFF2A2A2A);
@@ -1280,7 +1312,7 @@ public final class FeedingMiniGameScreen extends Screen {
         return Math.min(v, 1f);
     }
 
-    // Thick line as a quad (two triangles) using GUI render layer.
+    // draw a thick line by stamping small screen-space quads
     private void drawThickLine(DrawContext ctx,
                                float x1, float y1, float x2, float y2,
                                float thickness, int argb) {
@@ -1298,13 +1330,13 @@ public final class FeedingMiniGameScreen extends Screen {
         float ux = dx / len;
         float uy = dy / len;
 
-        // unit normal (perpendicular)
+        // unit normal
         float nx = -uy;
         float ny = ux;
 
         float half = thickness * 0.5f;
 
-        // stamp spacing (smaller => less "boxy", harder to slip through visually)
+        // tight spacing keeps the line from looking boxy
         float step = 0.5f;
         int steps = Math.max(1, (int) (len / step));
 
