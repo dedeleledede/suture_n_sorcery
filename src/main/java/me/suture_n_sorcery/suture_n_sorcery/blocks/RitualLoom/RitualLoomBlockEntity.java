@@ -180,6 +180,17 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         if (world != null) world.updateListeners(pos, getCachedState(), getCachedState(), 3);
     }
 
+    private void resetPressProgress() {
+        pressTicksElapsed = 0;
+        pressCostCarry = 0;
+        pressure = 0;
+    }
+
+    private void stopPressurizing() {
+        pressurizing = false;
+        resetPressProgress();
+    }
+
     private static RitualLoomPhase idleOrSaturated(int saturatedStrings) {
         return saturatedStrings >= REQUIRED_STRINGS ? RitualLoomPhase.SATURATED : RitualLoomPhase.IDLE;
     }
@@ -230,16 +241,11 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
 
             be.coreIsOutput = false;         // inserted = input core
             if (corePresent) {
-                be.pressTicksElapsed = 0;
-                be.pressCostCarry = 0;
-                be.pressure = 0;
+                be.resetPressProgress();
 
                 be.phase = RitualLoomPhase.CORE_INSERTED;
             } else {
-                be.pressurizing = false;
-                be.pressTicksElapsed = 0;
-                be.pressCostCarry = 0;
-                be.pressure = 0;
+                be.stopPressurizing();
 
                 be.phase = idleOrSaturated(be.saturatedStrings);
             }
@@ -336,10 +342,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
 
         if (be.pressurizing) {
             if (coreEmpty || be.coreIsOutput) {
-                be.pressurizing = false;
-                be.pressTicksElapsed = 0;
-                be.pressCostCarry = 0;
-                be.pressure = 0;
+                be.stopPressurizing();
 
                 be.phase = idleOrSaturated(be.saturatedStrings);
                 changed = true;
@@ -347,18 +350,12 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
             } else {
                 var def = RitualLoomRitualHandler.get(be.getStack(CORE_SLOT));
                 if (def == null) {
-                    be.pressurizing = false;
-                    be.pressTicksElapsed = 0;
-                    be.pressCostCarry = 0;
-                    be.pressure = 0;
+                    be.stopPressurizing();
                     be.phase = RitualLoomPhase.FAILED;
                     changed = true;
 
                 } else if (be.saturatedStrings < def.requiredStrings()) {
-                    be.pressurizing = false;
-                    be.pressTicksElapsed = 0;
-                    be.pressCostCarry = 0;
-                    be.pressure = 0;
+                    be.stopPressurizing();
                     be.phase = RitualLoomPhase.CORE_INSERTED;
                     changed = true;
 
@@ -377,10 +374,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                     }
 
                     if (be.bloodMl < cost) {
-                        be.pressurizing = false;
-                        be.pressTicksElapsed = 0;
-                        be.pressCostCarry = 0;
-                        be.pressure = 0;
+                        be.stopPressurizing();
                         be.phase = RitualLoomPhase.FAILED;
 
                     } else {
@@ -390,10 +384,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
                         be.phase = RitualLoomPhase.PRESSURIZING;
 
                         if (be.pressTicksElapsed >= totalTicks) {
-                            be.pressurizing = false;
-                            be.pressTicksElapsed = 0;
-                            be.pressCostCarry = 0;
-                            be.pressure = 0;
+                            be.stopPressurizing();
 
                             be.saturatedStrings = Math.max(0, be.saturatedStrings - def.requiredStrings());
 
