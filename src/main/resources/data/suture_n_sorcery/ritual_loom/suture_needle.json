@@ -1,0 +1,8 @@
+{
+  "input": { "item": "suture_n_sorcery:needle" },
+  "result": { "item": "suture_n_sorcery:suture_needle", "count": 1 },
+
+  "blood_ml": 400,
+  "press_ticks": 80,
+  "required_strings": 1
+}

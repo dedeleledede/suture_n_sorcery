@@ -4,6 +4,8 @@ import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserItem;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomItem;
 import me.suture_n_sorcery.suture_n_sorcery.items.*;
+import me.suture_n_sorcery.suture_n_sorcery.items.needle.Needle;
+import me.suture_n_sorcery.suture_n_sorcery.items.needle.SutureNeedle;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
@@ -24,6 +26,8 @@ public class ItemGroups {
                 entries.add(new ItemStack(RitualLoomItem.RITUAL_LOOM_ITEM));
                 entries.add(new ItemStack(HematicCatalyst.HEMATIC_CATALYST));
                 entries.add(new ItemStack(BoneMarrow.BONE_MARROW));
+                entries.add(new ItemStack(Needle.NEEDLE));
+                entries.add(new ItemStack(SutureNeedle.SUTURE_NEEDLE));
              })
             .build();
 

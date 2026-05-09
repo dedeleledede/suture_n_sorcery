@@ -16,15 +16,23 @@ public class Suture_n_sorcery implements ModInitializer {
     public void onInitialize() {
         LOGGER.info("[S&S] SUTURE & SORCERY HAS BEEN INITIALIZED.");
 
-        ModFluids.registerFluids();
-        ModBlocks.registerBlocks();
-        ModItems.registerItems();
-        ItemGroups.registerItemGroups();
-        ModEffects.registerEffects();
-        ModParticles.registerParticles();
-        ModBlockEntities.registerBlockEntities();
-        ModScreenHandlers.registerScreenHandlers();
-        RitualLoomRitualHandler.registerRitualLoomRituals();
-        ModSounds.registerSounds();
+        try {
+            ModFluids.registerFluids();
+            ModBlocks.registerBlocks();
+            ModItems.registerItems();
+            ItemGroups.registerItemGroups();
+            ModEffects.registerEffects();
+            ModParticles.registerParticles();
+            ModBlockEntities.registerBlockEntities();
+            ModScreenHandlers.registerScreenHandlers();
+            RitualLoomRitualHandler.registerRitualLoomRituals();
+            ModSounds.registerSounds();
+
+        } catch (Exception e) {
+            LOGGER.error("[S&S]{}", e.getMessage());
+            throw new RuntimeException(e);
+        }
+
+        LOGGER.info("[S&S] EVERYTHING HAS BEEN REGISTERED SUCCESSFULLY.");
     }
 }

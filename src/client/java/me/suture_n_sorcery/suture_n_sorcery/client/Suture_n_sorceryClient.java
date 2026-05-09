@@ -16,5 +16,6 @@ public class Suture_n_sorceryClient implements ClientModInitializer {
         ModShader.registerShader();
         HandledScreens.register(ModScreenHandlers.CONDENSER_SCREEN, CondenserScreen::new);
         HandledScreens.register(ModScreenHandlers.RITUAL_LOOM_SCREEN, RitualLoomScreen::new);
+        ModKeys.registerKeys();
     }
 }

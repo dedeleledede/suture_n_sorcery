@@ -36,7 +36,6 @@ public class Bleeding extends StatusEffect {
         return 1; // 0 < stored < 10 => Bleeding 1
     }
 
-    // Your durations:
     // 5 dmg  -> bleeding 1 -> 14s
     // 10 dmg -> bleeding 2 -> 12s
     // 15 dmg -> bleeding 3 -> 10s

@@ -9,5 +9,8 @@ import net.minecraft.util.Identifier;
 public final class ModDamageTypes {
     public static final RegistryKey<DamageType> BLEEDING =
             RegistryKey.of(RegistryKeys.DAMAGE_TYPE, Identifier.of(Suture_n_sorcery.MOD_ID, "bleeding"));
+
+    public static final RegistryKey<DamageType> SUTURE_FEED =
+            RegistryKey.of(RegistryKeys.DAMAGE_TYPE, Identifier.of(Suture_n_sorcery.MOD_ID, "suture_feed"));
     private ModDamageTypes() {}
 }

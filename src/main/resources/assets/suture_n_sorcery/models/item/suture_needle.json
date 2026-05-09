@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "suture_n_sorcery:item/suture_needle"
+  }
+}

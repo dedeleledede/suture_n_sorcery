@@ -2,9 +2,7 @@ package me.suture_n_sorcery.suture_n_sorcery.mixin.concentrated_blood_swim;
 
 import me.suture_n_sorcery.suture_n_sorcery.tags.ModFluidTags;
 import me.suture_n_sorcery.suture_n_sorcery.util.BloodFluidData;
-import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,7 +18,7 @@ public abstract class LivingEntityBloodFloatMixin {
 
         if (self instanceof net.minecraft.entity.player.PlayerEntity) return;
 
-        if (!((BloodFluidData)self).sns$isInBlood()) return;
+        if (((BloodFluidData) self).sns$isInBlood()) return;
         if (self.isTouchingWater() || self.isInLava()) return;
 
         double h = self.getFluidHeight(ModFluidTags.CONCENTRATED_BLOOD_SWIM);

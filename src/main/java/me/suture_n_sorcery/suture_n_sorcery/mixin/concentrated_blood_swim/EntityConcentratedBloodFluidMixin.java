@@ -17,22 +17,24 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Entity.class)
 public abstract class EntityConcentratedBloodFluidMixin implements BloodFluidData {
 
-    @Shadow protected Object2DoubleMap<TagKey<Fluid>> fluidHeight;
-    @Shadow public abstract boolean updateMovementInFluid(TagKey<Fluid> tag, double speed);
+    @Shadow
+    protected Object2DoubleMap<TagKey<Fluid>> fluidHeight;
 
-    @Unique private boolean sns$inBlood;
-    @Unique private boolean sns$jumpingInput;
+    @Shadow
+    public abstract boolean updateMovementInFluid(TagKey<Fluid> tag, double speed);
+
+    @Unique
+    private boolean sns$inBlood;
 
     // Run AFTER vanilla has cleared/rebuilt fluidHeight this tick
     @Inject(method = "baseTick", at = @At("TAIL"))
     private void sns$updateBloodFluidState(CallbackInfo ci) {
-        Entity e = (Entity)(Object)this;
+        Entity e = (Entity) (Object) this;
 
         // no viscosity while creative-flying
         if (e instanceof PlayerEntity p && p.getAbilities().flying) {
             this.sns$inBlood = false;
             this.fluidHeight.put(ModFluidTags.CONCENTRATED_BLOOD_SWIM, 0.0D);
-            this.sns$jumpingInput = false;
             return;
         }
 
@@ -41,12 +43,12 @@ public abstract class EntityConcentratedBloodFluidMixin implements BloodFluidDat
 
         if (!this.sns$inBlood) {
             this.fluidHeight.put(ModFluidTags.CONCENTRATED_BLOOD_SWIM, 0.0D);
-            this.sns$jumpingInput = false;
         }
     }
 
 
-    @Override public boolean sns$isInBlood() { return sns$inBlood; }
-    @Override public void sns$setJumpingInput(boolean v) { sns$jumpingInput = v; }
-    @Override public boolean sns$isJumpingInput() { return sns$jumpingInput; }
+    @Override
+    public boolean sns$isInBlood() {
+        return !sns$inBlood;
+    }
 }

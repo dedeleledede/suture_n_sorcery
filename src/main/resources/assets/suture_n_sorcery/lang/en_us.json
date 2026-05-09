@@ -1,12 +1,32 @@
 {
   "itemGroup.suture_n_sorcery": "Suture & Sorcery",
+
   "item.suture_n_sorcery.gauze": "Gauze",
   "item.suture_n_sorcery.dirty_gauze": "Dirty Gauze",
   "item.suture_n_sorcery.concentrated_blood_bucket": "Concentrated Blood Bucket",
   "item.suture_n_sorcery.hematic_catalyst": "Hematic Catalyst",
   "item.suture_n_sorcery.bone_marrow": "Bone Marrow",
+  "item.suture_n_sorcery.needle": "Needle",
+  "item.suture_n_sorcery.suture_needle": "Suture Needle",
+
+  "tooltip.suture_n_sorcery.hematic_warm_close": "§8§oWarm when held close.",
+  "tooltip.suture_n_sorcery.hematic_growth": "§4Growth: §4%s§8/§4%s",
+
   "block.suture_n_sorcery.condenser": "Condenser",
   "block.suture_n_sorcery.ritual_loom": "Ritual Loom",
+
   "effect.suture_n_sorcery.bleeding": "Bleeding",
-  "death.attack.suture_n_sorcery.bleeding": "%1$s bled out"
+
+  "death.attack.suture_n_sorcery.bleeding": "%1$s bled dry",
+  "death.attack.suture_n_sorcery.bleeding.player": "%2$s left %1$s bleeding out",
+  "death.attack.suture_n_sorcery.bleeding.item": "%1$s bled out from %2$s's %3$s",
+  "death.attack.suture_n_sorcery.bleeding.player.item": "%2$s carved %1$s open with %3$s",
+
+  "death.attack.suture_n_sorcery.suture_feed": "%1$s gave their last drop.",
+  "death.attack.suture_n_sorcery.suture_feed.player": "%2$s drained %1$s's life away.",
+  "death.attack.suture_n_sorcery.suture_feed.item": "%1$s was drained by %2$s's %3$s.",
+  "death.attack.suture_n_sorcery.suture_feed.player.item": "%2$s drained the last of %1$s's life force using %3$s.",
+
+  "key.category.suture_n_sorcery.main": "Suture & Sorcery",
+  "key.suture_n_sorcery.open_feeding_debug": "Open Feeding Debug"
 }

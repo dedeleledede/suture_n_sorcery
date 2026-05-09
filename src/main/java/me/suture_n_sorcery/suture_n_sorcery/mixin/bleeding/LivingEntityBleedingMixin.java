@@ -10,10 +10,8 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.PersistentProjectileEntity;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
-import net.minecraft.registry.entry.RegistryEntryList;
 import net.minecraft.registry.tag.ItemTags;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
@@ -54,7 +52,7 @@ public abstract class LivingEntityBleedingMixin implements BleedingHolder {
         if (!suture_n_sorcery$isSharp(source)) return;
 
         float healthLost = this.suture_n_sorcery$bleedPreHealth - self.getHealth();
-        if (healthLost < 5.0f) return;
+        if (healthLost < 4.0f) return;
 
         boolean alreadyBleeding = self.hasStatusEffect(Bleeding.entry());
         int hitTier = Bleeding.tierForDamage(healthLost);
