@@ -239,6 +239,69 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         return true;
     }
 
+    private boolean loadStringFromSlot() {
+        if (poleStrings >= MAX_STRINGS) return false;
+
+        ItemStack stack = getStack(STRING_SLOT);
+        if (stack.isEmpty() || !stack.isOf(Items.STRING)) return false;
+
+        poleStrings++;
+
+        stack.decrement(1);
+        if (stack.isEmpty()) {
+            setStack(STRING_SLOT, ItemStack.EMPTY);
+        }
+
+        return true;
+    }
+
+    private boolean saturateStrings(boolean coreEmpty) {
+        if (coreEmpty && poleStrings > 0 && saturatedStrings < MAX_STRINGS) {
+            final int baseCost = BLOOD_PER_STRING / TICKS_PER_STRING;
+            final int remainder = BLOOD_PER_STRING - (baseCost * TICKS_PER_STRING);
+
+            if (phase != RitualLoomPhase.SATURATING && saturatedStrings < REQUIRED_STRINGS) {
+                phase = RitualLoomPhase.SATURATING;
+                saturationTicks = 0;
+            }
+
+            int cost = baseCost + ((saturationTicks + 1 >= TICKS_PER_STRING) ? remainder : 0);
+
+            if (bloodMl >= cost) {
+                bloodMl -= cost;
+                saturationTicks++;
+
+                if (saturationTicks >= TICKS_PER_STRING) {
+                    saturationTicks = 0;
+                    poleStrings--;
+                    saturatedStrings++;
+                    stringNonce++;
+
+                    if (saturatedStrings >= REQUIRED_STRINGS && getStack(CORE_SLOT).isEmpty()) {
+                        phase = RitualLoomPhase.SATURATED;
+                    }
+                }
+                return true;
+            }
+
+            if (phase == RitualLoomPhase.SATURATING) {
+                saturationTicks = 0;
+                phase = idleOrSaturated(saturatedStrings);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (phase == RitualLoomPhase.SATURATING && coreEmpty) {
+            phase = idleOrSaturated(saturatedStrings);
+            saturationTicks = 0;
+            return true;
+        }
+
+        return false;
+    }
+
     // ticking
     public static void tick(World world, BlockPos pos, BlockState state, RitualLoomBlockEntity be) {
         if (world.isClient()) return;
@@ -286,66 +349,12 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
             }
         }
 
-        if (coreEmpty && be.poleStrings < MAX_STRINGS) {
-            ItemStack stack = be.getStack(STRING_SLOT);
-
-            if (!stack.isEmpty() && stack.isOf(Items.STRING)) {
-                be.poleStrings++;
-
-                stack.decrement(1);
-                if (stack.isEmpty()) {
-                    be.setStack(STRING_SLOT, ItemStack.EMPTY);
-                }
-
-                changed = true;
-            }
+        if (coreEmpty && be.loadStringFromSlot()) {
+            changed = true;
         }
 
-        if (coreEmpty && be.poleStrings > 0 && be.saturatedStrings < MAX_STRINGS) {
-
-            final int baseCost = BLOOD_PER_STRING / TICKS_PER_STRING;
-            final int remainder = BLOOD_PER_STRING - (baseCost * TICKS_PER_STRING);
-
-            if (be.phase != RitualLoomPhase.SATURATING && be.saturatedStrings < REQUIRED_STRINGS) {
-                be.phase = RitualLoomPhase.SATURATING;
-                be.saturationTicks = 0;
-                changed = true;
-            }
-
-            int cost = baseCost + ((be.saturationTicks + 1 >= TICKS_PER_STRING) ? remainder : 0);
-
-            if (be.bloodMl >= cost) {
-                be.bloodMl -= cost;
-                be.saturationTicks++;
-
-                if (be.saturationTicks >= TICKS_PER_STRING) {
-                    be.saturationTicks = 0;
-                    be.poleStrings--;
-                    be.saturatedStrings++;
-                    be.stringNonce++;
-
-                    if (be.saturatedStrings >= REQUIRED_STRINGS && be.getStack(CORE_SLOT).isEmpty()) {
-                        be.phase = RitualLoomPhase.SATURATED;
-                    }
-                }
-                changed = true;
-
-            } else {
-                // not enough blood to keep converting
-                if (be.phase == RitualLoomPhase.SATURATING) {
-                    be.saturationTicks = 0;
-                    be.phase = idleOrSaturated(be.saturatedStrings);
-                    changed = true;
-                }
-            }
-
-        } else {
-            // not converting
-            if (be.phase == RitualLoomPhase.SATURATING && coreEmpty) {
-                be.phase = idleOrSaturated(be.saturatedStrings);
-                be.saturationTicks = 0;
-                changed = true;
-            }
+        if (be.saturateStrings(coreEmpty)) {
+            changed = true;
         }
 
         if (be.pressurizing) {
