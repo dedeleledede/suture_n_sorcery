@@ -2,9 +2,11 @@
   "schemaVersion": 1,
   "id": "suture_n_sorcery",
   "version": "${version}",
-  "name": "suture_n_sorcery",
-  "description": "",
-  "authors": [],
+  "name": "Suture & Sorcery",
+  "description": "A dark occult Fabric mod centered on blood, thread, rituals, and forbidden-workshop machinery.",
+  "authors": [
+    "esther"
+  ],
   "contact": {},
   "license": "All-Rights-Reserved",
   "icon": "assets/suture_n_sorcery/icon.png",
@@ -30,7 +32,7 @@
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",
-    "fabric-api": "*",
+    "fabric-api": ">=${fabric_version}",
     "minecraft": "${minecraft_version}"
   }
 }
