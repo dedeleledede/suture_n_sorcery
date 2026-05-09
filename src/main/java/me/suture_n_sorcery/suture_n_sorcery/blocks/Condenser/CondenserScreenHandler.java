@@ -17,7 +17,6 @@ import java.util.Set;
 
 public class CondenserScreenHandler extends ScreenHandler {
 
-    // 0 = progress, 1 = maxProgress, 2 = tankMl
     private final PropertyDelegate properties;
     private final Inventory inventory;
 
@@ -25,27 +24,27 @@ public class CondenserScreenHandler extends ScreenHandler {
             me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze.DIRTY_GAUZE
     );
 
-        private static final class InputSlot extends Slot {
-            public InputSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
-            @Override public boolean canInsert(ItemStack stack) {
-                return PROCESSABLE_INPUTS.contains(stack.getItem());
-            }
+    private static final class InputSlot extends Slot {
+        public InputSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
+        @Override public boolean canInsert(ItemStack stack) {
+            return PROCESSABLE_INPUTS.contains(stack.getItem());
         }
+    }
 
-        private static final class OutputSlot extends Slot {
-            public OutputSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
-            @Override public boolean canInsert(ItemStack stack) {
-                return false;
-            }
+    private static final class OutputSlot extends Slot {
+        public OutputSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
+        @Override public boolean canInsert(ItemStack stack) {
+            return false;
         }
+    }
 
-        private static final class BucketSlot extends Slot {
-            public BucketSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
-            @Override public boolean canInsert(ItemStack stack) { return stack.isOf(Items.BUCKET); }
-        }
+    private static final class BucketSlot extends Slot {
+        public BucketSlot(Inventory inv, int index, int x, int y) { super(inv, index, x, y); }
+        @Override public boolean canInsert(ItemStack stack) { return stack.isOf(Items.BUCKET); }
+    }
 
     public CondenserScreenHandler(int syncId, PlayerInventory playerInventory) {
-        this(syncId, playerInventory, new SimpleInventory(CondenserBlockEntity.slot), new ArrayPropertyDelegate(3));
+        this(syncId, playerInventory, new SimpleInventory(CondenserBlockEntity.SLOT_COUNT), new ArrayPropertyDelegate(CondenserBlockEntity.PROPERTY_COUNT));
     }
 
     public CondenserScreenHandler(int syncId, PlayerInventory playerInventory, Inventory inventory, PropertyDelegate properties) {
@@ -53,19 +52,19 @@ public class CondenserScreenHandler extends ScreenHandler {
         this.inventory = inventory;
         this.properties = properties;
 
-        // INPUT slot
-        this.addSlot(new InputSlot(inventory, 0, 80, 18));
+        // dirty gauze input
+        this.addSlot(new InputSlot(inventory, CondenserBlockEntity.INPUT_SLOT, 80, 18));
 
-        // OUTPUT slot
-        this.addSlot(new OutputSlot(inventory, 1, 80, 54));
+        // clean gauze output
+        this.addSlot(new OutputSlot(inventory, CondenserBlockEntity.OUTPUT_SLOT, 80, 54));
 
-        // BUCKET slot
-        this.addSlot(new BucketSlot(inventory, 2, 43, 18));
+        // empty bucket input
+        this.addSlot(new BucketSlot(inventory, CondenserBlockEntity.BUCKET_INPUT_SLOT, 43, 18));
 
-        // OUTPUT BUCKET slot
-        this.addSlot(new OutputSlot(inventory, 3, 43, 54));
+        // concentrated blood bucket output
+        this.addSlot(new OutputSlot(inventory, CondenserBlockEntity.BUCKET_OUTPUT_SLOT, 43, 54));
 
-        // Player inventory
+        // player inventory
         for (int row = 0; row < 3; row++) {
             for (int col = 0; col < 9; col++) {
                 this.addSlot(new Slot(playerInventory, col + row * 9 + 9, 8 + col * 18, 84 + row * 18));
@@ -86,7 +85,7 @@ public class CondenserScreenHandler extends ScreenHandler {
         ItemStack stack = slot.getStack();
         ItemStack original = stack.copy();
 
-        final int MACHINE_SLOTS = CondenserBlockEntity.slot;
+        final int MACHINE_SLOTS = CondenserBlockEntity.SLOT_COUNT;
         final int PLAYER_END = this.slots.size();
 
         if (slotIndex < MACHINE_SLOTS) {
@@ -94,10 +93,10 @@ public class CondenserScreenHandler extends ScreenHandler {
             slot.onQuickTransfer(stack, original);
         } else {
             if (CondenserScreenHandler.PROCESSABLE_INPUTS.contains(stack.getItem())) {
-                if (!this.insertItem(stack, 0, 1, false)) return ItemStack.EMPTY;
+                if (!this.insertItem(stack, CondenserBlockEntity.INPUT_SLOT, CondenserBlockEntity.INPUT_SLOT + 1, false)) return ItemStack.EMPTY;
             }
             else if (stack.isOf(Items.BUCKET)) {
-                if (!this.insertItem(stack, 2, 3, false)) return ItemStack.EMPTY;
+                if (!this.insertItem(stack, CondenserBlockEntity.BUCKET_INPUT_SLOT, CondenserBlockEntity.BUCKET_INPUT_SLOT + 1, false)) return ItemStack.EMPTY;
             }
             else {
                 return ItemStack.EMPTY;
@@ -116,9 +115,9 @@ public class CondenserScreenHandler extends ScreenHandler {
     public boolean canUse(PlayerEntity player) {
         return inventory.canPlayerUse(player);
     }
-    public int getProgress() { return properties.get(0); }
-    public int getMaxProgress() { return properties.get(1); }
-    public int getTankMl() { return properties.get(2); }
+    public int getProgress() { return properties.get(CondenserBlockEntity.PROP_PROGRESS); }
+    public int getMaxProgress() { return properties.get(CondenserBlockEntity.PROP_MAX_PROGRESS); }
+    public int getTankMl() { return properties.get(CondenserBlockEntity.PROP_TANK_ML); }
 
     public int getScaledProgress(int pixels) {
         int p = getProgress();

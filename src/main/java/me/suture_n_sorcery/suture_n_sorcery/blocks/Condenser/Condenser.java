@@ -24,7 +24,7 @@ import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 
-public class Condenser extends HorizontalFacingBlock implements BlockEntityProvider, CondenserVoxel {
+public class Condenser extends HorizontalFacingBlock implements BlockEntityProvider {
     public static final MapCodec<Condenser> CODEC = Block.createCodec(Condenser::new);
 
     public Condenser(Settings settings) {
@@ -61,7 +61,7 @@ public class Condenser extends HorizontalFacingBlock implements BlockEntityProvi
         return ActionResult.PASS;
     }
 
-    // --- BlockEntityProvider ---
+    // block entity wiring
     @Override
     public @Nullable BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
         return new CondenserBlockEntity(pos, state);
@@ -79,8 +79,7 @@ public class Condenser extends HorizontalFacingBlock implements BlockEntityProvi
         return ModBlockEntities.CONDENSATOR_BLOCK_ENTITY == givenType ? (BlockEntityTicker<A>) ticker : null;
     }
 
-    // block hitbox
-
+    // slightly lower than a full block so the model does not feel like a cube
     private static final VoxelShape SHAPE = Block.createCuboidShape(0, 0, 0, 16, 14, 16);
 
     @Override
@@ -99,29 +98,11 @@ public class Condenser extends HorizontalFacingBlock implements BlockEntityProvi
     }
 
     @Override
-    public VoxelShape getCullingShape(BlockState state, BlockView world, BlockPos pos) {
-        return SHAPE;
-
-        // renderizar faces de vizinhos por dentro
-        // return VoxelShapes.empty();
-    }
-
-    @Override
-    public int getOpacity(BlockState state, BlockView world, BlockPos pos) {
-        return 0;
-    }
-
-    @Override
-    public boolean isTransparent(BlockState state, BlockView world, BlockPos pos) {
-        return true;
-    }
-
-    @Override
     protected float getAmbientOcclusionLightLevel(BlockState state, BlockView world, BlockPos pos) {
         return 1.0F;
     }
 
-    //registry
+    // registry
     public static final Identifier CONDENSATOR_ID =
             Identifier.of(Suture_n_sorcery.MOD_ID, "condenser");
 

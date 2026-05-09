@@ -1,5 +1,7 @@
 package me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 
 import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
@@ -33,6 +35,14 @@ public final class RitualLoomRitualHandler extends SinglePreparationResourceRelo
     private static final ResourceFinder FINDER =
             ResourceFinder.json("ritual_loom");
 
+    private static final String KEY_INPUT = "input";
+    private static final String KEY_RESULT = "result";
+    private static final String KEY_ITEM = "item";
+    private static final String KEY_COUNT = "count";
+    private static final String KEY_BLOOD_ML = "blood_ml";
+    private static final String KEY_PRESS_TICKS = "press_ticks";
+    private static final String KEY_REQUIRED_STRINGS = "required_strings";
+
     public static RitualDef get(ItemStack stack) {
         if (stack == null || stack.isEmpty()) return null;
         return BY_ITEM.get(stack.getItem());
@@ -42,7 +52,7 @@ public final class RitualLoomRitualHandler extends SinglePreparationResourceRelo
         return Math.max(1, MIN_REQUIRED_STRINGS);
     }
 
-    public static void registerRitualLoomRituals(){
+    public static void registerRitualLoomRituals() {
         ResourceLoader
                 .get(ResourceType.SERVER_DATA)
                 .registerReloader(
@@ -62,26 +72,11 @@ public final class RitualLoomRitualHandler extends SinglePreparationResourceRelo
             var resource = entry.getValue();
 
             try (var reader = resource.getReader()) {
-                var el = com.google.gson.JsonParser.parseReader(reader);
+                var el = JsonParser.parseReader(reader);
                 if (!el.isJsonObject()) continue;
 
-                var root = el.getAsJsonObject();
-
-                var inputObj = root.getAsJsonObject("input");
-                var inputId = Identifier.of(inputObj.get("item").getAsString());
-                var inputItem = Registries.ITEM.get(inputId);
-
-                var resultObj = root.getAsJsonObject("result");
-                var resultId = Identifier.of(resultObj.get("item").getAsString());
-                int count = resultObj.has("count") ? resultObj.get("count").getAsInt() : 1;
-                var resultItem = Registries.ITEM.get(resultId);
-                var resultStack = new ItemStack(resultItem, Math.max(1, count));
-
-                int bloodMl = Math.max(0, root.get("blood_ml").getAsInt());
-                int pressTicks = Math.max(1, root.get("press_ticks").getAsInt());
-                int reqStrings = Math.max(1, root.get("required_strings").getAsInt());
-
-                map.put(inputItem, new RitualDef(inputItem, resultStack, bloodMl, pressTicks, reqStrings));
+                var def = parseRitualDef(el.getAsJsonObject());
+                map.put(def.input(), def);
 
             } catch (Throwable t) {
                 Suture_n_sorcery.LOGGER.error("[S&S][RitualLoom] Bad ritual json: {} -> {}", id, t);
@@ -89,6 +84,28 @@ public final class RitualLoomRitualHandler extends SinglePreparationResourceRelo
         }
 
         return Map.copyOf(map);
+    }
+
+    private static RitualDef parseRitualDef(JsonObject root) {
+        var inputItem = parseItem(root.getAsJsonObject(KEY_INPUT));
+        var resultStack = parseResultStack(root.getAsJsonObject(KEY_RESULT));
+
+        int bloodMl = Math.max(0, root.get(KEY_BLOOD_ML).getAsInt());
+        int pressTicks = Math.max(1, root.get(KEY_PRESS_TICKS).getAsInt());
+        int reqStrings = Math.max(1, root.get(KEY_REQUIRED_STRINGS).getAsInt());
+
+        return new RitualDef(inputItem, resultStack, bloodMl, pressTicks, reqStrings);
+    }
+
+    private static Item parseItem(JsonObject object) {
+        var id = Identifier.of(object.get(KEY_ITEM).getAsString());
+        return Registries.ITEM.get(id);
+    }
+
+    private static ItemStack parseResultStack(JsonObject object) {
+        var item = parseItem(object);
+        int count = object.has(KEY_COUNT) ? object.get(KEY_COUNT).getAsInt() : 1;
+        return new ItemStack(item, Math.max(1, count));
     }
 
     @Override

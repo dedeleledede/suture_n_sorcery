@@ -25,7 +25,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory, NamedScreenHandlerFactory {
 
-    // slots
+    // machine slots shared with the screen handler
     public static final int BUCKET_SLOT = 0;
     public static final int STRING_SLOT = 1;
     public static final int CORE_SLOT   = 2;
@@ -48,7 +48,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     public static final int PHASE_COMPLETE      = RitualLoomPhase.COMPLETE.id();
     public static final int PHASE_FAILED        = RitualLoomPhase.FAILED.id();
 
-    // saturation tuning
+    // string saturation tuning
     private static final int BLOOD_PER_STRING = 100;
     private static final int TICKS_PER_STRING = 15;
 
@@ -78,31 +78,31 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
     private static final String NBT_PRESSURIZING = "Pressurizing";
     private static final String NBT_CORE_IS_OUTPUT = "CoreIsOutput";
 
-    // meters
+    // stored machine contents
     private int bloodMl = 0;
     private int poleStrings = 0;
     private int saturatedStrings = 0;
 
-    // ritual progress
+    // current ritual state
     private RitualLoomPhase phase = RitualLoomPhase.IDLE;
     private int pressure = 0;
     private boolean pressurizing = false;
 
     private int saturationTicks = 0;
 
-    // fx triggers
+    // visual replay guards for the client screen
     private int coreNonce = 0;
     private int stringNonce = 0;
     private boolean lastCorePresent = false;
 
     private boolean coreIsOutput = false;
 
-    // Recipe-active config (synced to screen)
+    // active recipe values synced to the screen
     private int activeRequiredStrings = 0;
     private int activePressTicks = 0;
     private int activeBloodCostMl = 0;
 
-    // Press progress
+    // press progress
     private int pressTicksElapsed = 0;
     private int pressCostCarry = 0;
 
@@ -111,7 +111,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
 
     private final DefaultedList<ItemStack> inventory = DefaultedList.ofSize(MACHINE_SLOT_COUNT, ItemStack.EMPTY);
 
-    // properties for screen
+    // synced values for the screen handler
     private final PropertyDelegate properties = new PropertyDelegate() {
         @Override public int get(int index) {
             return switch (index) {
@@ -164,7 +164,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         return new RitualLoomScreenHandler(syncId, playerInventory, this, properties);
     }
 
-    // valid cores
+    // validates input cores before the slot accepts them
     public boolean canInsertCore(ItemStack stack) {
         if (stack.isEmpty()) return false;
         if (pressurizing) return false;
@@ -176,7 +176,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         return saturatedStrings >= def.requiredStrings();
     }
 
-    // called by screen handler button click(client > server) to start/stop pressurize
+    // called by the screen handler when the press button changes
     public void setPressurizing(boolean pressed) {
         if (world == null || world.isClient()) return;
 
@@ -253,7 +253,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         if (corePresent == lastCorePresent) return false;
 
         lastCorePresent = corePresent;
-        coreIsOutput = false;         // inserted = input core
+        coreIsOutput = false;         // a newly inserted stack is always an input core
 
         if (corePresent) {
             resetPressProgress();
@@ -395,7 +395,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         setStack(CORE_SLOT, def.result().copy());
         coreIsOutput = true;
 
-        coreNonce++;          // FX trigger: craft complete
+        coreNonce++;          // tells the client to play completion effects once
         phase = RitualLoomPhase.COMPLETE;
     }
 
@@ -478,7 +478,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         }
     }
 
-    // ticking
+    // server tick entrypoint
     public static void tick(World world, BlockPos pos, BlockState state, RitualLoomBlockEntity be) {
         if (world.isClient()) return;
 
@@ -527,7 +527,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         }
     }
 
-    // nbt
+    // persistent state
     @Override
     public void writeData(WriteView view) {
         super.writeData(view);
@@ -560,7 +560,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
         coreIsOutput = view.getBoolean(NBT_CORE_IS_OUTPUT, false);
     }
 
-    // sidedinv / inv
+    // inventory access
     @Override public int size() { return inventory.size(); }
     @Override public boolean isEmpty() { return inventory.stream().allMatch(ItemStack::isEmpty); }
     @Override public ItemStack getStack(int slot) { return inventory.get(slot); }
@@ -606,7 +606,7 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
 
     @Override
     public boolean canExtract(int slot, ItemStack stack, Direction dir) {
-        // lock the core during pressurize
+        // keep the core locked while pressure is being applied
         if (slot == CORE_SLOT) return phase != RitualLoomPhase.PRESSURIZING;
         return true;
     }

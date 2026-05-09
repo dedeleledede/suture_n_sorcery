@@ -8,7 +8,9 @@ import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
 
 public class CondenserItem extends BlockItem {
-    public CondenserItem(Item.Settings settings) { super(Condenser.CONDENSATOR, settings); }
+    public CondenserItem(Item.Settings settings) {
+        super(Condenser.CONDENSATOR, settings);
+    }
 
     public static final Identifier CONDENSATOR_ITEM_ID =
             Identifier.of(Suture_n_sorcery.MOD_ID, "condenser");

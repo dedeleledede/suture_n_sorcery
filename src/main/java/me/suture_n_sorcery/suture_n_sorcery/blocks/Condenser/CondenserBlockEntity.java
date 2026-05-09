@@ -35,6 +35,20 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
     public static final int ML_PER_DIRTY_GAUZE = 250;
     public static final int MAX_PROGRESS = 200;
 
+    public static final int INPUT_SLOT = 0;
+    public static final int OUTPUT_SLOT = 1;
+    public static final int BUCKET_INPUT_SLOT = 2;
+    public static final int BUCKET_OUTPUT_SLOT = 3;
+    public static final int SLOT_COUNT = 4;
+
+    public static final int PROP_PROGRESS = 0;
+    public static final int PROP_MAX_PROGRESS = 1;
+    public static final int PROP_TANK_ML = 2;
+    public static final int PROPERTY_COUNT = 3;
+
+    private static final String NBT_PROGRESS = "Progress";
+    private static final String NBT_TANK_ML = "TankMl";
+
     private int progress = 0;
     private int tankMl = 0;
 
@@ -42,7 +56,7 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
         super(ModBlockEntities.CONDENSATOR_BLOCK_ENTITY, pos, state);
     }
 
-    // ticking
+    // server tick entrypoint
     public static void tick(World world, BlockPos pos, BlockState state, CondenserBlockEntity be) {
         if (world.isClient()) return;
         be.tryFillBuckets();
@@ -65,14 +79,14 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
     }
 
     private boolean canProcess() {
-        ItemStack in = items.get(0);
+        ItemStack in = items.get(INPUT_SLOT);
         if (in.isEmpty() || !in.isOf(DirtyGauze.DIRTY_GAUZE)) return false;
         if (tankMl + ML_PER_DIRTY_GAUZE > TANK_CAPACITY_ML) return false;
 
         Item cleanItem = Registries.ITEM.get(Gauze.GAUZE_ID);
         if (cleanItem == Items.AIR) return false;
 
-        ItemStack out = items.get(1);
+        ItemStack out = items.get(OUTPUT_SLOT);
         if (out.isEmpty()) return true;
         if (!out.isOf(cleanItem)) return false;
         return out.getCount() < out.getMaxCount();
@@ -82,24 +96,24 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
         Item cleanItem = Registries.ITEM.get(Gauze.GAUZE_ID);
         if (cleanItem == Items.AIR) return;
 
-        items.get(0).decrement(1);
+        items.get(INPUT_SLOT).decrement(1);
 
-        ItemStack out = items.get(1);
-        if (out.isEmpty()) items.set(1, new ItemStack(cleanItem));
+        ItemStack out = items.get(OUTPUT_SLOT);
+        if (out.isEmpty()) items.set(OUTPUT_SLOT, new ItemStack(cleanItem));
         else out.increment(1);
 
         tankMl = Math.min(TANK_CAPACITY_ML, tankMl + ML_PER_DIRTY_GAUZE);
     }
 
     private boolean canOutputTo(ItemStack toAdd) {
-        ItemStack out = items.get(3);
+        ItemStack out = items.get(BUCKET_OUTPUT_SLOT);
         if (out.isEmpty()) return true;
         if (!ItemStack.areItemsEqual(out, toAdd)) return false;
         return out.getCount() < out.getMaxCount();
     }
 
     private void tryFillBuckets() {
-        ItemStack inBuckets = items.get(2);
+        ItemStack inBuckets = items.get(BUCKET_INPUT_SLOT);
         if (!inBuckets.isOf(Items.BUCKET)) return;
         if (tankMl < BUCKET_AMOUNT_ML) return;
 
@@ -108,10 +122,10 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
         if (!canOutputTo(produced)) return;
 
         inBuckets.decrement(1);
-        items.set(2, inBuckets);
+        items.set(BUCKET_INPUT_SLOT, inBuckets);
 
-        ItemStack out = items.get(3);
-        if (out.isEmpty()) items.set(3, produced);
+        ItemStack out = items.get(BUCKET_OUTPUT_SLOT);
+        if (out.isEmpty()) items.set(BUCKET_OUTPUT_SLOT, produced);
         else {
             out.increment(1);
             items.set(3, out);
@@ -126,20 +140,19 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
         return Text.translatable("block.suture_n_sorcery.condenser");
     }
 
-    public static final int slot = 4;
-    private final DefaultedList<ItemStack> items = DefaultedList.ofSize(slot, ItemStack.EMPTY);
+    private final DefaultedList<ItemStack> items = DefaultedList.ofSize(SLOT_COUNT, ItemStack.EMPTY);
 
     private final PropertyDelegate properties = new PropertyDelegate() {
         @Override public int get(int index) {
             return switch (index) {
-                case 0 -> progress;
-                case 1 -> MAX_PROGRESS;
-                case 2 -> tankMl;
+                case PROP_PROGRESS -> progress;
+                case PROP_MAX_PROGRESS -> MAX_PROGRESS;
+                case PROP_TANK_ML -> tankMl;
                 default -> 0;
             };
         }
         @Override public void set(int index, int value) {}
-        @Override public int size() { return 3; }
+        @Override public int size() { return PROPERTY_COUNT; }
     };
 
     @Override
@@ -147,25 +160,25 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
         return new CondenserScreenHandler(syncId, playerInventory, this, properties);
     }
 
-    // nbt
+    // persistent state
     @Override
     public void writeData(WriteView view) {
         super.writeData(view);
         Inventories.writeData(view, items);
-        view.putInt("Progress", progress);
-        view.putInt("TankMl", tankMl);
+        view.putInt(NBT_PROGRESS, progress);
+        view.putInt(NBT_TANK_ML, tankMl);
     }
 
     @Override
     public void readData(ReadView view) {
         super.readData(view);
         Inventories.readData(view, items);
-        progress = view.getInt("Progress", 0);
-        tankMl = view.getInt("TankMl", 0);
+        progress = view.getInt(NBT_PROGRESS, 0);
+        tankMl = view.getInt(NBT_TANK_ML, 0);
     }
 
 
-    // inv // sidedinv
+    // inventory access
     @Override public int size() { return items.size(); }
     @Override public boolean isEmpty() { return items.stream().allMatch(ItemStack::isEmpty); }
     @Override public ItemStack getStack(int slot) { return items.get(slot); }
@@ -181,9 +194,9 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
                 && player.squaredDistanceTo(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) <= 64.0;
     }
 
-    private static final int[] UP = new int[]{0};
-    private static final int[] DOWN = new int[]{1};
-    private static final int[] SIDE = new int[]{0};
+    private static final int[] UP = new int[]{INPUT_SLOT};
+    private static final int[] DOWN = new int[]{OUTPUT_SLOT};
+    private static final int[] SIDE = new int[]{INPUT_SLOT};
 
     @Override
     public int[] getAvailableSlots(Direction side) {
@@ -194,11 +207,11 @@ public class CondenserBlockEntity extends BlockEntity implements SidedInventory,
 
     @Override
     public boolean canInsert(int slot, ItemStack stack, @Nullable Direction dir) {
-        return slot == 0 && stack.isOf(DirtyGauze.DIRTY_GAUZE);
+        return slot == INPUT_SLOT && stack.isOf(DirtyGauze.DIRTY_GAUZE);
     }
 
     @Override
     public boolean canExtract(int slot, ItemStack stack, Direction dir) {
-        return slot == 1;
+        return slot == OUTPUT_SLOT;
     }
 }

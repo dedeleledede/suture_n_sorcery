@@ -14,7 +14,7 @@ import net.minecraft.screen.ScreenHandler;
 import net.minecraft.screen.slot.Slot;
 
 public class RitualLoomScreenHandler extends ScreenHandler {
-    // Machine slot indices
+    // machine slot indices
     public static final int BUCKET_SLOT = RitualLoomBlockEntity.BUCKET_SLOT;
     public static final int STRING_SLOT = RitualLoomBlockEntity.STRING_SLOT;
     public static final int CORE_SLOT   = RitualLoomBlockEntity.CORE_SLOT;
@@ -26,7 +26,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
     private static final int MACHINE_START = 0;
     private static final int MACHINE_END_EXCL = MACHINE_START + MACHINE_SLOT_COUNT;
 
-    // button ids (ScreenHandler clickButton)
+    // button ids sent through screenhandler clickbutton
     public static final int BTN_PRESSURIZE_START = 200;
     public static final int BTN_PRESSURIZE_STOP  = 201;
 
@@ -34,13 +34,13 @@ public class RitualLoomScreenHandler extends ScreenHandler {
     private final PropertyDelegate properties;
 
     public RitualLoomScreenHandler(int syncId, PlayerInventory playerInventory) {
-                this(syncId, playerInventory,
+        this(syncId, playerInventory,
                 new net.minecraft.inventory.SimpleInventory(MACHINE_SLOT_COUNT),
                 new ArrayPropertyDelegate(RitualLoomBlockEntity.PROPERTY_COUNT)
         );
     }
 
-    // Server constructor
+    // server constructor
     public RitualLoomScreenHandler(int syncId, PlayerInventory playerInventory, Inventory inventory, PropertyDelegate properties) {
         super(ModScreenHandlers.RITUAL_LOOM_SCREEN, syncId);
         checkSize(inventory, MACHINE_SLOT_COUNT);
@@ -49,7 +49,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
 
         inventory.onOpen(playerInventory.player);
 
-        // Bucket slot
+        // bucket slot
         this.addSlot(new Slot(inventory, BUCKET_SLOT, 6, 18) {
             @Override
             public boolean canInsert(ItemStack stack) {
@@ -57,17 +57,17 @@ public class RitualLoomScreenHandler extends ScreenHandler {
             }
         });
 
-        // String slot
+        // string slot
         this.addSlot(new Slot(inventory, STRING_SLOT, 26, 18) {
             @Override
             public boolean canInsert(ItemStack stack) {
-                // block string feeding once core exists (keeps phase logic clean)
+                // strings can only feed before a core is inserted
                 if (!inventory.getStack(CORE_SLOT).isEmpty()) return false;
                 return stack.isOf(Items.STRING);
             }
         });
 
-        // CORE SLOT
+        // core slot
         this.addSlot(new Slot(inventory, CORE_SLOT, CORE_X, CORE_Y) {
 
             private boolean ready() {
@@ -90,7 +90,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
                 if (!ready()) return false;
                 if (!isCoreAllowed(stack)) return false;
 
-                // accept stacks the slot will only take 1 due to max count = 1
+                // only one core can be processed at a time
                 return stack.getCount() >= 1;
             }
 
@@ -127,7 +127,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
     @Override
     public void onClosed(PlayerEntity player) {
         super.onClosed(player);
-        // if player closes while holding stop pressurizing
+        // closing the screen should release the press button
         if (inventory instanceof RitualLoomBlockEntity be) {
             be.setPressurizing(false);
         }
@@ -139,7 +139,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
             return super.onButtonClick(player, id);
         }
 
-        // client must return true so the packet is sent
+        // the client must accept the click so minecraft sends it to the server
         if (player.getEntityWorld().isClient()) return true;
 
         if (inventory instanceof RitualLoomBlockEntity be) {
@@ -194,12 +194,12 @@ public class RitualLoomScreenHandler extends ScreenHandler {
 
         if (slotIndex >= MACHINE_END_EXCL) {
 
-            // Try core slot FIRST, but only move ONE item
+            // try the core slot first, but only move one item
             if (tryQuickMoveOneCore(player, slot, original)) {
                 return copy;
             }
 
-            // let vanilla try other machine slots (bucket/string)
+            // let vanilla try the bucket and string slots afterward
             if (!this.insertItem(original, MACHINE_START, MACHINE_END_EXCL, false)) {
                 return empty;
             }
@@ -220,7 +220,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
         return copy;
     }
 
-    // synced values PropertyDelegate
+    // synced values from the block entity property delegate
     public int getBloodMl()       { return properties.get(RitualLoomBlockEntity.PROP_BLOOD_ML); }
     public int getBloodMaxMl()    { return properties.get(RitualLoomBlockEntity.PROP_MAX_BLOOD_ML); }
 
@@ -229,7 +229,7 @@ public class RitualLoomScreenHandler extends ScreenHandler {
     public int getStringsCap()    { return properties.get(RitualLoomBlockEntity.PROP_MAX_STRINGS); }
 
     public int getPhase()         { return properties.get(RitualLoomBlockEntity.PROP_PHASE); }
-    public int getSaturationTicks(){ return properties.get(RitualLoomBlockEntity.PROP_SATURATION_TICKS); } // now “convert ticks”
+    public int getSaturationTicks(){ return properties.get(RitualLoomBlockEntity.PROP_SATURATION_TICKS); }
     public int getPressure()      { return properties.get(RitualLoomBlockEntity.PROP_PRESSURE); }
     public int getCoreNonce()     { return properties.get(RitualLoomBlockEntity.PROP_CORE_NONCE); }
     public int getStringNonce()   { return properties.get(RitualLoomBlockEntity.PROP_STRING_NONCE); }
