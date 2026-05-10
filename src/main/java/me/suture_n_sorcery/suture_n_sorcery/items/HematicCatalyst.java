@@ -275,6 +275,24 @@ public final class HematicCatalyst extends Item {
         setGrowth(stack, getGrowth(stack) + delta);
     }
 
+    public static void setGrowthForDebug(ItemStack stack, int growth) {
+        if (growth < 0) growth = 0;
+        if (growth > MAX_GROWTH) growth = MAX_GROWTH;
+
+        setHalfUnits(stack, growth * 2);
+        stack.set(MATURATION_LOCK, growth >= MAX_GROWTH);
+    }
+
+    public static void clearOwner(ItemStack stack) {
+        stack.set(OWNER_UUID, "");
+    }
+
+    public static void setAbsorbedCatalyst(PlayerEntity player, boolean absorbed) {
+        if (player instanceof HematicBondHolder holder) {
+            holder.suture_n_sorcery$setAbsorbedHematicCatalyst(absorbed);
+        }
+    }
+
     public static boolean isReady(ItemStack stack) {
         return stack.getOrDefault(MATURATION_LOCK, false) || halfUnits(stack) >= READY_HALF_UNITS;
     }
