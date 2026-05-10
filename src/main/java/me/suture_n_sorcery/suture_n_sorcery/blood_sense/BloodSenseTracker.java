@@ -1,24 +1,19 @@
 package me.suture_n_sorcery.suture_n_sorcery.blood_sense;
 
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.LivingEntity;
-import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
 
-import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public final class BloodSenseTracker {
 
     private static final int TRACE_LIFETIME_TICKS = 20 * 60 * 12;
     private static final int MAX_TRACES_PER_WORLD = 256;
-
-    private static final Map<RegistryKey<World>, List<BloodSenseTrace>> TRACES = new HashMap<>();
+    private static final int PRUNE_INTERVAL_TICKS = 20 * 30;
 
     private BloodSenseTracker() {
     }
@@ -27,6 +22,12 @@ public final class BloodSenseTracker {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity.getEntityWorld() instanceof ServerWorld world) {
                 recordDeath(world, entity);
+            }
+        });
+
+        ServerTickEvents.END_WORLD_TICK.register(world -> {
+            if (world.getTime() % PRUNE_INTERVAL_TICKS == 0) {
+                prune(world);
             }
         });
     }
@@ -44,7 +45,14 @@ public final class BloodSenseTracker {
         prune(world);
 
         long radiusSquared = (long)radius * radius;
-        return TRACES.getOrDefault(world.getRegistryKey(), List.of()).stream()
+        return state(world).traces().stream()
+                .map(trace -> new BloodSenseTrace(
+                        BloodSenseTraceType.byId(trace.type()),
+                        world.getRegistryKey(),
+                        trace.pos(),
+                        trace.createdTime(),
+                        trace.strength()
+                ))
                 .filter(trace -> trace.pos().getSquaredDistance(center) <= radiusSquared)
                 .sorted(Comparator.comparingInt(trace -> trace.pos().getManhattanDistance(center)))
                 .toList();
@@ -53,22 +61,29 @@ public final class BloodSenseTracker {
     private static void record(ServerWorld world, BloodSenseTraceType type, BlockPos pos, int strength) {
         prune(world);
 
-        List<BloodSenseTrace> traces = TRACES.computeIfAbsent(world.getRegistryKey(), key -> new ArrayList<>());
-        traces.add(new BloodSenseTrace(type, world.getRegistryKey(), pos.toImmutable(), world.getTime(), strength));
+        BloodSenseWorldState state = state(world);
+        List<BloodSenseWorldState.StoredTrace> traces = state.traces();
+        traces.add(new BloodSenseWorldState.StoredTrace(type.ordinal(), pos.toImmutable(), world.getTime(), strength));
 
         if (traces.size() > MAX_TRACES_PER_WORLD) {
             traces.subList(0, traces.size() - MAX_TRACES_PER_WORLD).clear();
         }
+
+        state.markDirty();
     }
 
     private static void prune(ServerWorld world) {
-        List<BloodSenseTrace> traces = TRACES.get(world.getRegistryKey());
-        if (traces == null) return;
+        BloodSenseWorldState state = state(world);
+        List<BloodSenseWorldState.StoredTrace> traces = state.traces();
 
         long now = world.getTime();
-        traces.removeIf(trace -> trace.age(now) > TRACE_LIFETIME_TICKS);
-        if (traces.isEmpty()) {
-            TRACES.remove(world.getRegistryKey());
+        boolean removed = traces.removeIf(trace -> now - trace.createdTime() > TRACE_LIFETIME_TICKS);
+        if (removed) {
+            state.markDirty();
         }
+    }
+
+    private static BloodSenseWorldState state(ServerWorld world) {
+        return world.getPersistentStateManager().getOrCreate(BloodSenseWorldState.TYPE);
     }
 }

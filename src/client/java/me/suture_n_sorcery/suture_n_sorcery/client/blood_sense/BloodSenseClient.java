@@ -1,10 +1,15 @@
 package me.suture_n_sorcery.suture_n_sorcery.client.blood_sense;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
+import me.suture_n_sorcery.suture_n_sorcery.mixin.client.DrawContextInvoker;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
+import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -13,16 +18,13 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.VertexConsumer;
-import net.minecraft.client.world.ClientWorld;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
-import net.minecraft.particle.ParticleTypes;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.math.random.Random;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +33,7 @@ public final class BloodSenseClient {
 
     private static final int DURATION_TICKS = 20 * 6;
     private static final int PULSE_TICKS = 38;
-    private static final float MAX_RADIUS = 24f;
+    private static final float MAX_RADIUS = 16f;
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
 
     private static int remainingTicks = 0;
@@ -44,12 +46,14 @@ public final class BloodSenseClient {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (remainingTicks > 0 && !client.isPaused()) {
                 remainingTicks--;
-                spawnSenseParticles(client);
             }
             if (remainingTicks <= 0) visibleTraces.clear();
         });
 
         WorldRenderEvents.BEFORE_TRANSLUCENT.register(BloodSenseClient::renderWorldSense);
+        HudRenderCallback.EVENT.register((context, tickCounter) ->
+                renderRefraction(context, tickCounter.getTickProgress(false))
+        );
 
         ClientPlayNetworking.registerGlobalReceiver(BloodSenseResponsePayload.ID, (payload, context) ->
                 context.client().execute(() -> activate(payload.traces()))
@@ -106,45 +110,6 @@ public final class BloodSenseClient {
         remainingTicks = DURATION_TICKS;
     }
 
-    private static void spawnSenseParticles(MinecraftClient client) {
-        ClientPlayerEntity player = client.player;
-        ClientWorld world = client.world;
-        if (player == null || world == null) return;
-
-        int age = DURATION_TICKS - remainingTicks;
-        float pulse01 = Math.min(1f, age / (float)PULSE_TICKS);
-        float radius = MAX_RADIUS * smooth(pulse01);
-
-        spawnTracePillars(world, player, radius);
-    }
-
-    private static void spawnTracePillars(ClientWorld world, ClientPlayerEntity player, float radius) {
-        Random random = world.getRandom();
-
-        for (ClientTrace trace : visibleTraces) {
-            double dx = (trace.pos.getX() + 0.5) - player.getX();
-            double dz = (trace.pos.getZ() + 0.5) - player.getZ();
-            if ((dx * dx) + (dz * dz) > radius * radius) continue;
-
-            // traces only become visible once the pulse reaches them
-            int count = Math.max(1, trace.strength / 24);
-            double baseX = trace.pos.getX() + 0.5;
-            double baseY = trace.pos.getY() + 0.2;
-            double baseZ = trace.pos.getZ() + 0.5;
-
-            for (int i = 0; i < count; i++) {
-                double ox = (random.nextDouble() - 0.5) * 0.7;
-                double oz = (random.nextDouble() - 0.5) * 0.7;
-                double y = baseY + random.nextDouble() * (1.2 + trace.strength / 28.0);
-                double vy = trace.type == 1 ? 0.035 : 0.018;
-                world.addParticleClient(ParticleTypes.END_ROD, baseX + ox, y, baseZ + oz, 0.0, vy, 0.0);
-                if (trace.type == 0 && random.nextInt(3) == 0) {
-                    world.addParticleClient(ParticleTypes.DRIPPING_LAVA, baseX + ox * 0.5, y, baseZ + oz * 0.5, 0.0, 0.0, 0.0);
-                }
-            }
-        }
-    }
-
     private static void renderWorldSense(WorldRenderContext context) {
         MinecraftClient client = MinecraftClient.getInstance();
         if (remainingTicks <= 0 || client.world == null || client.player == null) return;
@@ -164,23 +129,28 @@ public final class BloodSenseClient {
 
         MatrixStack.Entry entry = matrices.peek();
         VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
-        drawPulseSphere(entry, lines, center, radius, strength);
+        drawPulseSphere(entry, lines, center, radius, strength, age);
         drawTracePillars(entry, context, client.player, radius, strength);
 
         matrices.pop();
     }
 
-    private static void drawPulseSphere(MatrixStack.Entry entry, VertexConsumer lines, Vec3d center, float radius, float strength) {
+    private static void drawPulseSphere(MatrixStack.Entry entry, VertexConsumer lines, Vec3d center, float radius, float strength, int age) {
         if (radius <= 0.25f) return;
 
-        int alpha = Math.clamp((int)(150 * strength), 20, 150);
-        int red = 165;
-        int green = 18;
-        int blue = 30;
+        int alpha = Math.clamp((int)(230 * strength), 80, 230);
+        float shimmer = 0.08f + 0.05f * MathHelper.sin(age * 0.45f);
+        float inner = Math.max(0.25f, radius - shimmer);
+        float outer = radius + shimmer;
 
-        drawCircle(entry, lines, center, radius, 0, red, green, blue, alpha);
-        drawCircle(entry, lines, center, radius, 1, red, green, blue, alpha);
-        drawCircle(entry, lines, center, radius, 2, red, green, blue, alpha);
+        drawCircle(entry, lines, center, radius, 0, 230, 24, 38, alpha);
+        drawCircle(entry, lines, center, radius, 1, 230, 24, 38, alpha);
+        drawCircle(entry, lines, center, radius, 2, 230, 24, 38, alpha);
+
+        drawCircle(entry, lines, center, outer, 0, 255, 80, 86, Math.clamp(alpha / 2, 45, 120));
+        drawCircle(entry, lines, center, inner, 0, 110, 20, 32, Math.clamp(alpha / 2, 45, 120));
+        drawCircle(entry, lines, center.add(0.0, radius * 0.34, 0.0), radius * 0.78f, 0, 255, 42, 56, Math.clamp(alpha / 3, 35, 95));
+        drawCircle(entry, lines, center.add(0.0, -radius * 0.34, 0.0), radius * 0.78f, 0, 255, 42, 56, Math.clamp(alpha / 3, 35, 95));
     }
 
     private static void drawCircle(MatrixStack.Entry entry, VertexConsumer lines, Vec3d center, float radius, int plane, int r, int g, int b, int a) {
@@ -217,10 +187,10 @@ public final class BloodSenseClient {
             if ((dx * dx) + (dz * dz) > radius * radius) continue;
 
             float traceStrength = MathHelper.clamp(trace.strength / 100f, 0.25f, 1f) * strength;
-            int alpha = Math.clamp((int)(80 * traceStrength), 20, 90);
-            int r = trace.type == 1 ? 170 : 145;
-            int g = trace.type == 1 ? 26 : 5;
-            int b = trace.type == 1 ? 55 : 18;
+            int alpha = Math.clamp((int)(165 * traceStrength), 70, 180);
+            int r = trace.type == 1 ? 240 : 210;
+            int g = trace.type == 1 ? 42 : 10;
+            int b = trace.type == 1 ? 82 : 28;
 
             double x = trace.pos.getX() + 0.5;
             double y0 = trace.pos.getY() + 0.08;
@@ -229,7 +199,7 @@ public final class BloodSenseClient {
             double half = 0.18 + traceStrength * 0.22;
 
             drawPillarLines(entry, lines, x, y0, z, half, y1, r, g, b, alpha);
-            addLine(entry, lines, x, y0, z, x, y1 + 0.6, z, 235, 36, 52, Math.clamp(alpha + 50, 50, 160));
+            addLine(entry, lines, x, y0, z, x, y1 + 0.6, z, 255, 54, 70, Math.clamp(alpha + 65, 120, 230));
         }
     }
 
@@ -257,6 +227,43 @@ public final class BloodSenseClient {
 
         lines.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a).normal(entry, nx, ny, nz);
         lines.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).normal(entry, nx, ny, nz);
+    }
+
+    private static void renderRefraction(DrawContext context, float tickDelta) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (remainingTicks <= 0 || client.world == null || client.player == null) return;
+        if (client.currentScreen != null) return;
+
+        GpuTextureView srcView = outputView(client);
+        if (srcView == null) return;
+
+        int width = client.getWindow().getScaledWidth();
+        int height = client.getWindow().getScaledHeight();
+        if (width <= 0 || height <= 0) return;
+
+        int age = DURATION_TICKS - remainingTicks;
+        float pulse01 = Math.min(1f, (age + tickDelta) / (float)PULSE_TICKS);
+        float radius = Math.min(1f, 0.64f * smooth(pulse01));
+        float strength = Math.min(1f, (remainingTicks + tickDelta) / (float)DURATION_TICKS);
+
+        int pr = 128;
+        int pg = 128;
+        int pb = Math.clamp((int)(radius * 255f), 0, 255);
+        int pa = Math.clamp((int)(strength * 235f), 0, 235);
+        int packed = (pa << 24) | (pr << 16) | (pg << 8) | pb;
+
+        ((DrawContextInvoker) context).sns$drawTexturedQuad(
+                ModShader.BLOOD_SENSE_REFRACTION,
+                srcView,
+                0, 0, width, height,
+                0f, 1f, 0f, 1f,
+                packed
+        );
+    }
+
+    private static GpuTextureView outputView(MinecraftClient client) {
+        var override = RenderSystem.outputColorTextureOverride;
+        return override != null ? override : client.getFramebuffer().getColorAttachmentView();
     }
 
     private static float smooth(float value) {

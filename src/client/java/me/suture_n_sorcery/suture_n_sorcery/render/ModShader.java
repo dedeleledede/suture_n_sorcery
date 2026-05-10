@@ -9,6 +9,7 @@ import net.minecraft.util.Identifier;
 
 public final class ModShader {
     public static RenderPipeline SHOCKWAVE;
+    public static RenderPipeline BLOOD_SENSE_REFRACTION;
 
     private ModShader() {
     }
@@ -19,6 +20,16 @@ public final class ModShader {
                         .withLocation(Identifier.of(Suture_n_sorcery.MOD_ID, "pipeline/shockwave_gui"))
                         .withVertexShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/shockwave"))
                         .withFragmentShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/shockwave"))
+                        .withSampler("Sampler0")
+                        .withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
+                        .withUsePipelineDrawModeForGui(true)
+                        .build()
+        );
+        BLOOD_SENSE_REFRACTION = RenderPipelines.register(
+                RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
+                        .withLocation(Identifier.of(Suture_n_sorcery.MOD_ID, "pipeline/blood_sense_refraction"))
+                        .withVertexShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/blood_sense_refraction"))
+                        .withFragmentShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/blood_sense_refraction"))
                         .withSampler("Sampler0")
                         .withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
                         .withUsePipelineDrawModeForGui(true)
