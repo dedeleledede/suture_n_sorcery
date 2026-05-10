@@ -12,8 +12,11 @@ import java.util.List;
 public final class BloodSenseTracker {
 
     private static final int TRACE_LIFETIME_TICKS = 20 * 60 * 12;
-    private static final int MAX_TRACES_PER_WORLD = 256;
+    private static final int MAX_TRACES_PER_WORLD = 512;
     private static final int PRUNE_INTERVAL_TICKS = 20 * 30;
+
+    private static final int TRACE_MERGE_RADIUS = 4;
+    private static final int MAX_TRACE_STRENGTH = 1800;
 
     private BloodSenseTracker() {
     }
@@ -33,12 +36,12 @@ public final class BloodSenseTracker {
     }
 
     public static void recordDeath(ServerWorld world, LivingEntity entity) {
-        int strength = Math.min(100, 28 + Math.round(entity.getMaxHealth() * 2.5f));
+        int strength = 28 + Math.round(entity.getMaxHealth() * 2.5f);
         record(world, BloodSenseTraceType.DEATH, entity.getBlockPos(), strength);
     }
 
     public static void recordRitual(ServerWorld world, BlockPos pos, int strength) {
-        record(world, BloodSenseTraceType.RITUAL, pos, Math.max(35, Math.min(100, strength)));
+        record(world, BloodSenseTraceType.RITUAL, pos, Math.max(35, strength));
     }
 
     public static List<BloodSenseTrace> recentTraces(ServerWorld world, BlockPos center, int radius) {
@@ -63,13 +66,72 @@ public final class BloodSenseTracker {
 
         BloodSenseWorldState state = state(world);
         List<BloodSenseWorldState.StoredTrace> traces = state.traces();
-        traces.add(new BloodSenseWorldState.StoredTrace(type.ordinal(), pos.toImmutable(), world.getTime(), strength));
+
+        int mergeIndex = findMergeTarget(traces, type, pos);
+        long now = world.getTime();
+
+        if (mergeIndex >= 0) {
+            BloodSenseWorldState.StoredTrace old = traces.get(mergeIndex);
+
+            int oldStrength = old.strength();
+            int incomingStrength = Math.max(1, strength);
+            int combinedStrength = Math.min(MAX_TRACE_STRENGTH, oldStrength + incomingStrength);
+
+            BlockPos mergedPos = weightedMergePos(old.pos(), oldStrength, pos, incomingStrength);
+
+            traces.set(mergeIndex, new BloodSenseWorldState.StoredTrace(
+                    type.ordinal(),
+                    mergedPos,
+                    now,
+                    combinedStrength
+            ));
+        } else {
+            traces.add(new BloodSenseWorldState.StoredTrace(
+                    type.ordinal(),
+                    pos.toImmutable(),
+                    now,
+                    Math.min(MAX_TRACE_STRENGTH, Math.max(1, strength))
+            ));
+        }
 
         if (traces.size() > MAX_TRACES_PER_WORLD) {
+            traces.sort(Comparator
+                    .comparingInt(BloodSenseWorldState.StoredTrace::strength)
+                    .thenComparingLong(BloodSenseWorldState.StoredTrace::createdTime));
+
             traces.subList(0, traces.size() - MAX_TRACES_PER_WORLD).clear();
         }
 
         state.markDirty();
+    }
+
+    private static int findMergeTarget(List<BloodSenseWorldState.StoredTrace> traces, BloodSenseTraceType type, BlockPos pos) {
+        int bestIndex = -1;
+        long bestDistance = Long.MAX_VALUE;
+        long mergeRadiusSquared = (long) TRACE_MERGE_RADIUS * TRACE_MERGE_RADIUS;
+
+        for (int i = 0; i < traces.size(); i++) {
+            BloodSenseWorldState.StoredTrace trace = traces.get(i);
+            if (trace.type() != type.ordinal()) continue;
+
+            long distance = (long) trace.pos().getSquaredDistance(pos);
+            if (distance <= mergeRadiusSquared && distance < bestDistance) {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    private static BlockPos weightedMergePos(BlockPos a, int aStrength, BlockPos b, int bStrength) {
+        int total = Math.max(1, aStrength + bStrength);
+
+        int x = Math.round((a.getX() * aStrength + b.getX() * bStrength) / (float) total);
+        int y = Math.round((a.getY() * aStrength + b.getY() * bStrength) / (float) total);
+        int z = Math.round((a.getZ() * aStrength + b.getZ() * bStrength) / (float) total);
+
+        return new BlockPos(x, y, z);
     }
 
     private static void prune(ServerWorld world) {

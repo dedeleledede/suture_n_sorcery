@@ -2,6 +2,7 @@ package me.suture_n_sorcery.suture_n_sorcery.client.blood_sense;
 
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.mixin.client.DrawContextInvoker;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
@@ -9,7 +10,8 @@ import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
 import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -22,6 +24,7 @@ import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
@@ -51,8 +54,10 @@ public final class BloodSenseClient {
         });
 
         WorldRenderEvents.BEFORE_TRANSLUCENT.register(BloodSenseClient::renderWorldSense);
-        HudRenderCallback.EVENT.register((context, tickCounter) ->
-                renderRefraction(context, tickCounter.getTickProgress(false))
+        HudElementRegistry.attachElementAfter(
+                VanillaHudElements.MISC_OVERLAYS,
+                Identifier.of(Suture_n_sorcery.MOD_ID, "blood_sense_refraction"),
+                (context, tickCounter) -> renderRefraction(context, tickCounter.getTickProgress(false))
         );
 
         ClientPlayNetworking.registerGlobalReceiver(BloodSenseResponsePayload.ID, (payload, context) ->
@@ -82,7 +87,7 @@ public final class BloodSenseClient {
 
     private static void renderInventoryMarker(Screen screen, DrawContext context, int mouseX, int mouseY, float tickDelta) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || !HematicCatalyst.hasAbsorbedCatalyst(client.player)) return;
+        if (!HematicCatalyst.hasAbsorbedCatalyst(client.player)) return;
 
         int left = (screen.width - 176) / 2;
         int top = (screen.height - 166) / 2;
@@ -186,20 +191,33 @@ public final class BloodSenseClient {
             double dz = (trace.pos.getZ() + 0.5) - player.getZ();
             if ((dx * dx) + (dz * dz) > radius * radius) continue;
 
-            float traceStrength = MathHelper.clamp(trace.strength / 100f, 0.25f, 1f) * strength;
-            int alpha = Math.clamp((int)(165 * traceStrength), 70, 180);
-            int r = trace.type == 1 ? 240 : 210;
-            int g = trace.type == 1 ? 42 : 10;
-            int b = trace.type == 1 ? 82 : 28;
+            float mass = traceVisualMass(trace.strength);
+            float traceStrength = MathHelper.clamp((0.28f + mass * 0.72f) * strength, 0f, 1.6f);
+
+            int alpha = Math.clamp((int)(85 + 145 * traceStrength), 70, 240);
+            int r = trace.type == 1 ? 255 : 220;
+            int g = trace.type == 1 ? 48 : 16;
+            int b = trace.type == 1 ? 96 : 34;
 
             double x = trace.pos.getX() + 0.5;
-            double y0 = trace.pos.getY() + 0.08;
-            double y1 = y0 + 2.5 + traceStrength * 3.0;
+            double y0 = trace.pos.getY() + 0.06;
+            double y1 = y0 + 2.2 + mass * 5.8;
             double z = trace.pos.getZ() + 0.5;
-            double half = 0.18 + traceStrength * 0.22;
 
-            drawPillarLines(entry, lines, x, y0, z, half, y1, r, g, b, alpha);
-            addLine(entry, lines, x, y0, z, x, y1 + 0.6, z, 255, 54, 70, Math.clamp(alpha + 65, 120, 230));
+            double inner = 0.10 + mass * 0.20;
+            double outer = 0.26 + mass * 0.42;
+
+            drawPillarLines(entry, lines, x, y0, z, outer, y1, r, g, b, alpha / 2);
+            drawPillarLines(entry, lines, x, y0 + 0.18, z, inner, y1 + 0.28, 255, 55, 75, Math.clamp(alpha + 30, 120, 255));
+
+            drawSquareRing(entry, lines, x, y0 + 0.08, z, outer * 1.25, r, g, b, alpha / 2);
+            drawSquareRing(entry, lines, x, y1, z, outer * 0.95, 255, 65, 88, Math.clamp(alpha + 15, 100, 255));
+            drawSquareRing(entry, lines, x, y1 + 0.38, z, inner * 0.8, 255, 115, 128, Math.clamp(alpha, 90, 220));
+
+            drawPillarSpiral(entry, lines, x, y0, z, outer * 0.92, y1, trace.strength, 255, 48, 72, Math.clamp(alpha + 20, 110, 255));
+            drawPillarSpiral(entry, lines, x, y0 + 0.15, z, outer * 0.72, y1 + 0.2, trace.strength + 9, r, g, b, alpha / 2);
+
+            addLine(entry, lines, x, y0 - 0.2, z, x, y1 + 0.85, z, 255, 70, 82, Math.clamp(alpha + 45, 130, 255));
         }
     }
 
@@ -241,6 +259,18 @@ public final class BloodSenseClient {
         int height = client.getWindow().getScaledHeight();
         if (width <= 0 || height <= 0) return;
 
+        int packed = getPacked(tickDelta);
+
+        ((DrawContextInvoker) context).sns$drawTexturedQuad(
+                ModShader.BLOOD_SENSE_REFRACTION,
+                srcView,
+                0, 0, width, height,
+                0f, 1f, 1f, 0f,
+                packed
+        );
+    }
+
+    private static int getPacked(float tickDelta) {
         int age = DURATION_TICKS - remainingTicks;
         float pulse01 = Math.min(1f, (age + tickDelta) / (float)PULSE_TICKS);
         float radius = Math.min(1f, 0.64f * smooth(pulse01));
@@ -251,14 +281,7 @@ public final class BloodSenseClient {
         int pb = Math.clamp((int)(radius * 255f), 0, 255);
         int pa = Math.clamp((int)(strength * 235f), 0, 235);
         int packed = (pa << 24) | (pr << 16) | (pg << 8) | pb;
-
-        ((DrawContextInvoker) context).sns$drawTexturedQuad(
-                ModShader.BLOOD_SENSE_REFRACTION,
-                srcView,
-                0, 0, width, height,
-                0f, 1f, 0f, 1f,
-                packed
-        );
+        return packed;
     }
 
     private static GpuTextureView outputView(MinecraftClient client) {
@@ -269,6 +292,43 @@ public final class BloodSenseClient {
     private static float smooth(float value) {
         float clamped = MathHelper.clamp(value, 0f, 1f);
         return clamped * clamped * (3f - 2f * clamped);
+    }
+
+    private static float traceVisualMass(int strength) {
+        float value = Math.max(1f, strength);
+        float max = 1800f;
+        return MathHelper.clamp((float)(Math.log1p(value) / Math.log1p(max)), 0.18f, 1.0f);
+    }
+
+    private static void drawSquareRing(MatrixStack.Entry entry, VertexConsumer lines, double x, double y, double z, double half, int r, int g, int b, int a) {
+        addLine(entry, lines, x - half, y, z - half, x + half, y, z - half, r, g, b, a);
+        addLine(entry, lines, x + half, y, z - half, x + half, y, z + half, r, g, b, a);
+        addLine(entry, lines, x + half, y, z + half, x - half, y, z + half, r, g, b, a);
+        addLine(entry, lines, x - half, y, z + half, x - half, y, z - half, r, g, b, a);
+    }
+
+    private static void drawPillarSpiral(MatrixStack.Entry entry, VertexConsumer lines, double x, double y0, double z, double radius, double y1, int seed, int r, int g, int b, int a) {
+        int steps = 18;
+        double height = y1 - y0;
+        double phase = seed * 0.17;
+
+        double lastX = x + Math.cos(phase) * radius;
+        double lastY = y0;
+        double lastZ = z + Math.sin(phase) * radius;
+
+        for (int i = 1; i <= steps; i++) {
+            double t = i / (double) steps;
+            double angle = phase + t * Math.PI * 2.4;
+            double px = x + Math.cos(angle) * radius;
+            double py = y0 + height * t;
+            double pz = z + Math.sin(angle) * radius;
+
+            addLine(entry, lines, lastX, lastY, lastZ, px, py, pz, r, g, b, a);
+
+            lastX = px;
+            lastY = py;
+            lastZ = pz;
+        }
     }
 
     private record ClientTrace(int type, BlockPos pos, int strength, int ageTicks) {
