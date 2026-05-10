@@ -7,10 +7,13 @@ import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.render.VertexFormats;
 import net.minecraft.util.Identifier;
 
-public class ModShader {
+public final class ModShader {
     public static RenderPipeline SHOCKWAVE;
 
-    public static void registerShader(){
+    private ModShader() {
+    }
+
+    public static void registerShader() {
         SHOCKWAVE = RenderPipelines.register(
                 RenderPipeline.builder(RenderPipelines.GUI_SNIPPET)
                         .withLocation(Identifier.of(Suture_n_sorcery.MOD_ID, "pipeline/shockwave_gui"))

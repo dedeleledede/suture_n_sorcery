@@ -2,23 +2,27 @@ package me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser;
 
 import com.mojang.serialization.MapCodec;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
-import net.minecraft.block.*;
-import net.minecraft.item.ItemPlacementContext;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.sound.BlockSoundGroup;
-import net.minecraft.state.StateManager;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.Direction;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModBlockEntities;
+import net.minecraft.block.Block;
+import net.minecraft.block.BlockEntityProvider;
+import net.minecraft.block.BlockState;
+import net.minecraft.block.HorizontalFacingBlock;
+import net.minecraft.block.ShapeContext;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.entity.BlockEntityTicker;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemPlacementContext;
+import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryKeys;
 import net.minecraft.screen.NamedScreenHandlerFactory;
+import net.minecraft.sound.BlockSoundGroup;
+import net.minecraft.state.StateManager;
 import net.minecraft.util.ActionResult;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
@@ -61,7 +65,6 @@ public class Condenser extends HorizontalFacingBlock implements BlockEntityProvi
         return ActionResult.PASS;
     }
 
-    // block entity wiring
     @Override
     public @Nullable BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
         return new CondenserBlockEntity(pos, state);
@@ -79,7 +82,6 @@ public class Condenser extends HorizontalFacingBlock implements BlockEntityProvi
         return ModBlockEntities.CONDENSATOR_BLOCK_ENTITY == givenType ? (BlockEntityTicker<A>) ticker : null;
     }
 
-    // slightly lower than a full block so the model does not feel like a cube
     private static final VoxelShape SHAPE = Block.createCuboidShape(0, 0, 0, 16, 14, 16);
 
     @Override

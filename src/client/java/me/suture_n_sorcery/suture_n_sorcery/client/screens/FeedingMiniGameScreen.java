@@ -640,8 +640,6 @@ public final class FeedingMiniGameScreen extends Screen {
         drawCut(ctx);
         drawTargetAndFeedback(ctx);
         drawStitchPath(ctx);
-
-        drawTargetAndFeedback(ctx);
         drawClosureMeter(ctx);
 
         drawRope(ctx);

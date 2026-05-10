@@ -10,16 +10,15 @@ import net.minecraft.util.math.random.Random;
 import org.jetbrains.annotations.Nullable;
 
 public class BloodSplatParticle extends BillboardParticle {
-
     private static final int SPLAT_TICKS = 18;
+    private static final int BLOOD_COLOR = 0x8A0303;
 
     protected BloodSplatParticle(ClientWorld world, double x, double y, double z, SpriteProvider sprites) {
         super(world, x, y, z, 0, 0, 0, sprites.getSprite(world.random));
 
-        int c = 0x8A0303;
-        this.red = ((c >> 16) & 0xFF) / 255.0f;
-        this.green = ((c >> 8) & 0xFF) / 255.0f;
-        this.blue = (c & 0xFF) / 255.0f;
+        this.red = ((BLOOD_COLOR >> 16) & 0xFF) / 255.0f;
+        this.green = ((BLOOD_COLOR >> 8) & 0xFF) / 255.0f;
+        this.blue = (BLOOD_COLOR & 0xFF) / 255.0f;
         this.alpha = 1.0f;
 
         this.collidesWithWorld = false;

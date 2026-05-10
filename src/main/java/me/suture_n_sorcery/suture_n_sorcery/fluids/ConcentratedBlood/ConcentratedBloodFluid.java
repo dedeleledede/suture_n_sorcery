@@ -5,6 +5,8 @@ import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityCollisionHandler;
 import net.minecraft.fluid.FlowableFluid;
 import net.minecraft.fluid.Fluid;
 import net.minecraft.fluid.FluidState;
@@ -20,6 +22,11 @@ import net.minecraft.world.WorldAccess;
 import net.minecraft.world.WorldView;
 
 public class ConcentratedBloodFluid extends FlowableFluid {
+    private static final double HORIZONTAL_DRAG = 0.35D;
+    private static final int LEVEL_DECREASE_PER_BLOCK = 3;
+    private static final int TICK_RATE = 25;
+    private static final float BLAST_RESISTANCE = 10.0F;
+    private static final int MAX_FLOW_DISTANCE = 2;
 
     public static final Identifier CONCENTRATED_BLOOD_ID =
             Identifier.of(Suture_n_sorcery.MOD_ID, "concentrated_blood");
@@ -31,7 +38,7 @@ public class ConcentratedBloodFluid extends FlowableFluid {
 
     public static final FlowableFluid FLOWING_CONCENTRATED_BLOOD = new ConcentratedBloodFluid.Flowing();
 
-    public Fluid getStill(){
+    public Fluid getStill() {
         return CONCENTRATED_BLOOD;
     }
 
@@ -46,7 +53,7 @@ public class ConcentratedBloodFluid extends FlowableFluid {
     }
 
     @Override
-    public Item getBucketItem(){
+    public Item getBucketItem() {
         return ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET;
     }
 
@@ -63,7 +70,7 @@ public class ConcentratedBloodFluid extends FlowableFluid {
 
     @Override
     protected int getLevelDecreasePerBlock(WorldView world) {
-        return 3;
+        return LEVEL_DECREASE_PER_BLOCK;
     }
 
     @Override
@@ -73,24 +80,22 @@ public class ConcentratedBloodFluid extends FlowableFluid {
 
     @Override
     public int getTickRate(WorldView world) {
-        return 25;
+        return TICK_RATE;
     }
 
     @Override
     protected float getBlastResistance() {
-        return 10.0F;
+        return BLAST_RESISTANCE;
     }
 
     @Override
     protected int getMaxFlowDistance(WorldView world) {
-        return 2;
+        return MAX_FLOW_DISTANCE;
     }
 
     @Override
-    protected void onEntityCollision(net.minecraft.world.World world, BlockPos pos, net.minecraft.entity.Entity entity, net.minecraft.entity.EntityCollisionHandler handler) {
-        // horizontal drag
-        entity.setVelocity(entity.getVelocity().multiply(0.35, 1.0, 0.35));
-
+    protected void onEntityCollision(net.minecraft.world.World world, BlockPos pos, Entity entity, EntityCollisionHandler handler) {
+        entity.setVelocity(entity.getVelocity().multiply(HORIZONTAL_DRAG, 1.0, HORIZONTAL_DRAG));
         entity.velocityDirty = true;
     }
 
@@ -101,7 +106,7 @@ public class ConcentratedBloodFluid extends FlowableFluid {
 
     @Override
     protected BlockState toBlockState(FluidState state) {
-        return ConcentratedBloodBlock.CONCENTRATED_BLOOD_BLOCK.getDefaultState() //concentrated blood block dps
+        return ConcentratedBloodBlock.CONCENTRATED_BLOOD_BLOCK.getDefaultState()
                 .with(Properties.LEVEL_15, getBlockStateLevel(state));
     }
 
@@ -130,6 +135,6 @@ public class ConcentratedBloodFluid extends FlowableFluid {
         }
     }
 
-    public ConcentratedBloodFluid()
-	{}
+    public ConcentratedBloodFluid() {
+    }
 }

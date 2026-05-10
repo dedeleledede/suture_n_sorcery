@@ -12,6 +12,8 @@ import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 
 public final class ModBlockEntities {
+    private ModBlockEntities() {
+    }
 
     public static BlockEntityType<RitualLoomBlockEntity> RITUAL_LOOM_BLOCK_ENTITY;
     public static BlockEntityType<CondenserBlockEntity> CONDENSATOR_BLOCK_ENTITY;

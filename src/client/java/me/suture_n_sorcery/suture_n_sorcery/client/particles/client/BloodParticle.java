@@ -10,6 +10,9 @@ import net.minecraft.util.math.random.Random;
 import org.jetbrains.annotations.Nullable;
 
 public class BloodParticle extends BillboardParticle {
+    private static final int BLOOD_COLOR = 0x8A0303;
+    private static final double AIR_DAMPING = 0.85;
+    private static final double GROUND_DAMPING = 0.4;
 
     protected BloodParticle(
             ClientWorld world,
@@ -19,10 +22,9 @@ public class BloodParticle extends BillboardParticle {
     ) {
         super(world, x, y, z, vx, vy, vz, sprites.getSprite(world.random));
 
-        int c = 0x8A0303;
-        this.red = ((c >> 16) & 0xFF) / 255.0f;
-        this.green = ((c >> 8) & 0xFF) / 255.0f;
-        this.blue = (c & 0xFF) / 255.0f;
+        this.red = ((BLOOD_COLOR >> 16) & 0xFF) / 255.0f;
+        this.green = ((BLOOD_COLOR >> 8) & 0xFF) / 255.0f;
+        this.blue = (BLOOD_COLOR & 0xFF) / 255.0f;
         this.alpha = 1.0f;
 
         this.collidesWithWorld = true;
@@ -31,7 +33,7 @@ public class BloodParticle extends BillboardParticle {
         this.scale = 0.08f + this.random.nextFloat() * 0.05f;
         this.maxAge = 16 + this.random.nextInt(10);
 
-        this.zRotation = this.random.nextFloat() * ((float)Math.PI * 2.0f);
+        this.zRotation = this.random.nextFloat() * ((float) Math.PI * 2.0f);
         this.lastZRotation = this.zRotation;
 
         this.velocityY = vy + 0.06;
@@ -46,19 +48,17 @@ public class BloodParticle extends BillboardParticle {
     public void tick() {
         super.tick();
 
-        // damping similar to your old behavior
-        this.velocityX *= 0.85;
-        this.velocityY *= 0.85;
-        this.velocityZ *= 0.85;
+        this.velocityX *= AIR_DAMPING;
+        this.velocityY *= AIR_DAMPING;
+        this.velocityZ *= AIR_DAMPING;
 
         if (this.onGround) {
-            this.velocityX *= 0.4;
-            this.velocityZ *= 0.4;
+            this.velocityX *= GROUND_DAMPING;
+            this.velocityZ *= GROUND_DAMPING;
         }
 
         this.alpha = 1.0f - (this.age / (float) this.maxAge);
     }
-
 
     public static class Factory implements ParticleFactory<SimpleParticleType> {
         private final SpriteProvider sprites;

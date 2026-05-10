@@ -9,12 +9,14 @@ import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
 
-public class ModParticles {
+public final class ModParticles {
+    private ModParticles() {
+    }
 
-    public static final SimpleParticleType BLOOD_PARTICLE = FabricParticleTypes.simple(); // old spray
-    public static final SimpleParticleType BLOOD_SPLAT = FabricParticleTypes.simple();    // ground decal
+    public static final SimpleParticleType BLOOD_PARTICLE = FabricParticleTypes.simple();
+    public static final SimpleParticleType BLOOD_SPLAT = FabricParticleTypes.simple();
     public static final ParticleType<BloodDropParticleEffect> BLOOD_DROP =
-            FabricParticleTypes.complex(BloodDropParticleEffect.CODEC, BloodDropParticleEffect.PACKET_CODEC); // glued drip
+            FabricParticleTypes.complex(BloodDropParticleEffect.CODEC, BloodDropParticleEffect.PACKET_CODEC);
 
     public static void registerParticles() {
         Registry.register(Registries.PARTICLE_TYPE, Identifier.of(Suture_n_sorcery.MOD_ID, "blood_particle"), BLOOD_PARTICLE);

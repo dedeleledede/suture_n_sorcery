@@ -26,31 +26,32 @@ public abstract class SoundSystemSeekMixin {
     private static final Identifier SUCCESS_ID =
             Identifier.of(Suture_n_sorcery.MOD_ID, "ritual_loom_success");
 
-    @Unique private static final float FADE_START = 8.33f;
-    @Unique private static final float TRACK_LEN = 9.50f;
-    @Unique private static final float SUCCESS_CUE = 8.10f;
+    @Unique
+    private static final float FADE_START = 8.33f;
+    @Unique
+    private static final float TRACK_LEN = 9.50f;
+    @Unique
+    private static final float SUCCESS_CUE = 8.10f;
 
-    @Unique private static final float SUCCESS_BEFORE_FADE = (FADE_START - SUCCESS_CUE); // 0.23s
-    @Unique private static final float FADE_OUT_LEN = (TRACK_LEN - FADE_START);          // 1.17s
+    @Unique
+    private static final float SUCCESS_BEFORE_FADE = FADE_START - SUCCESS_CUE;
+    @Unique
+    private static final float FADE_OUT_LEN = TRACK_LEN - FADE_START;
 
-    @Unique private static boolean sns$internalPlay = false;
+    @Unique
+    private static boolean sns$internalPlay = false;
 
     @Inject(
             method = "play(Lnet/minecraft/client/sound/SoundInstance;)Lnet/minecraft/client/sound/SoundSystem$PlayResult;",
             at = @At("HEAD"),
             cancellable = true
     )
-
     private void sns$replacePressurize(SoundInstance sound, CallbackInfoReturnable<SoundSystem.PlayResult> cir) {
-
         if (sns$internalPlay) return;
         if (sound == null) return;
-
         if (!PRESS_ID.equals(sound.getId())) return;
 
         int pressTicks = PressurizeArm.take();
-
-        // if not armed, let vanilla play
         if (pressTicks <= 0) return;
 
         sns$internalPlay = true;

@@ -3,7 +3,11 @@ package me.suture_n_sorcery.suture_n_sorcery.registries;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserItem;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomItem;
-import me.suture_n_sorcery.suture_n_sorcery.items.*;
+import me.suture_n_sorcery.suture_n_sorcery.items.BoneMarrow;
+import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
+import me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze;
+import me.suture_n_sorcery.suture_n_sorcery.items.Gauze;
+import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.Needle;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.SutureNeedle;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
@@ -14,7 +18,10 @@ import net.minecraft.registry.Registry;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
-public class ItemGroups {
+public final class ItemGroups {
+    private ItemGroups() {
+    }
+
     public static final ItemGroup SUTURE_N_SORCERY = FabricItemGroup.builder()
             .icon(() -> new ItemStack(Gauze.GAUZE))
             .displayName(Text.translatable("itemGroup.suture_n_sorcery"))
@@ -28,11 +35,10 @@ public class ItemGroups {
                 entries.add(new ItemStack(BoneMarrow.BONE_MARROW));
                 entries.add(new ItemStack(Needle.NEEDLE));
                 entries.add(new ItemStack(SutureNeedle.SUTURE_NEEDLE));
-             })
+            })
             .build();
 
-
-    public static void registerItemGroups(){
+    public static void registerItemGroups() {
         Registry.register(
                 Registries.ITEM_GROUP,
                 Identifier.of(Suture_n_sorcery.MOD_ID, "item_group"),

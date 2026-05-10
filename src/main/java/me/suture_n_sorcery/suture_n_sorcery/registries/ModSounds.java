@@ -7,6 +7,8 @@ import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 
 public final class ModSounds {
+    private ModSounds() {
+    }
 
     public static final Identifier RITUAL_LOOM_PRESSURIZE_ID =
             Identifier.of(Suture_n_sorcery.MOD_ID, "ritual_loom_pressurize");

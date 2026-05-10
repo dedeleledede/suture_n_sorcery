@@ -11,8 +11,9 @@ import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.mixin.client.DrawContextInvoker;
 import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gl.*;
+import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
@@ -39,9 +40,8 @@ import static net.minecraft.util.math.MathHelper.cos;
 import static net.minecraft.util.math.MathHelper.sin;
 
 
-public class RitualLoomScreen extends HandledScreen<RitualLoomScreenHandler>{
+public class RitualLoomScreen extends HandledScreen<RitualLoomScreenHandler> {
 
-    // identifiers
     private static final Identifier GUI =
             Identifier.of(Suture_n_sorcery.MOD_ID, "textures/gui/ritual_loom.png");
 
@@ -66,8 +66,6 @@ public class RitualLoomScreen extends HandledScreen<RitualLoomScreenHandler>{
     private static final Identifier HEMATIC_VIGNETTE =
             Identifier.of(Suture_n_sorcery.MOD_ID, "textures/gui/vignette.png");
 
-    // dimentions
-
     private static final int BLOOD_FRAME_W = 16;
     private static final int BLOOD_FRAME_H = 16;
     private static final int BLOOD_FRAME_COUNT = 19;
@@ -87,7 +85,7 @@ public class RitualLoomScreen extends HandledScreen<RitualLoomScreenHandler>{
     private static final int VIG_W = 300;
     private static final int VIG_H = 300;
 
-    // vars
+    // client-only visual state
 
     private static final int SHOCKWAVE_DURATION_TICKS = 18;
     private static final float SHOCKWAVE_RADIUS_POWER = 2.0f;
@@ -958,7 +956,7 @@ public class RitualLoomScreen extends HandledScreen<RitualLoomScreenHandler>{
 
     // gpu
     private static GpuTextureView sns$getOutputView(MinecraftClient client) {
-        var ov = com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride; // :contentReference[oaicite:3]{index=3}
+        var ov = RenderSystem.outputColorTextureOverride;
         return ov != null ? ov : client.getFramebuffer().getColorAttachmentView();
     }
     private void sns$postProcess(DrawContext ctx, float tickDelta   ) {
