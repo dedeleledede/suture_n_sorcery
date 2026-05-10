@@ -22,10 +22,11 @@
   "death.attack.suture_n_sorcery.bleeding.item": "%1$s bled out from %2$s's %3$s",
   "death.attack.suture_n_sorcery.bleeding.player.item": "%2$s carved %1$s open with %3$s",
 
-  "death.attack.suture_n_sorcery.suture_feed": "%1$s gave their last drop.",
+  "death.attack.suture_n_sorcery.suture_feed": "%1$s threaded too much blood through the catalyst.",
   "death.attack.suture_n_sorcery.suture_feed.player": "%2$s drained %1$s's life away.",
   "death.attack.suture_n_sorcery.suture_feed.item": "%1$s was drained by %2$s's %3$s.",
   "death.attack.suture_n_sorcery.suture_feed.player.item": "%2$s drained the last of %1$s's life force using %3$s.",
+  "death.attack.suture_n_sorcery.suture_feed.manual": "%1$s fed the catalyst past what their body could spare.",
 
   "key.category.suture_n_sorcery.main": "Suture & Sorcery",
   "key.suture_n_sorcery.open_feeding_debug": "Open Feeding Debug"

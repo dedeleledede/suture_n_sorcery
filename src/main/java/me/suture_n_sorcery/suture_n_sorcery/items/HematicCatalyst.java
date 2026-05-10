@@ -1,6 +1,8 @@
 package me.suture_n_sorcery.suture_n_sorcery.items;
 
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
+import me.suture_n_sorcery.suture_n_sorcery.items.needle.Needle;
+import me.suture_n_sorcery.suture_n_sorcery.items.needle.NeedleStacks;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.SutureNeedle;
 import me.suture_n_sorcery.suture_n_sorcery.network.HematicFeedPayload;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModDamageTypes;
@@ -47,6 +49,9 @@ public final class HematicCatalyst extends Item {
     private static final int PERFECT_MANUAL_FEED_HALF_STEPS = 14;
     private static final int MIN_MANUAL_FEED_HALF_STEPS = 1;
     private static final int PASSIVE_FEED_HALF_STEPS = 1;
+    private static final float PASSIVE_DAMAGE_PER_HALF_STEP = 2.0f;
+    private static final float MIN_MANUAL_FEED_DAMAGE = 0.25f;
+    private static final float MAX_MANUAL_FEED_DAMAGE = 2.0f;
     private static final int MIN_FEEDING_NUBS = 6;
     private static final int MAX_FEEDING_NUBS = 16;
 
@@ -93,12 +98,7 @@ public final class HematicCatalyst extends Item {
             if (!(world instanceof ServerWorld serverWorld)) return;
 
             ItemStack stack = findCatalystInInventory(player);
-            boolean fed = (stack != null) && tryPassiveFeed(player, stack, damageTaken);
-
-            if (fed) {
-                var src = world.getDamageSources().create(ModDamageTypes.SUTURE_FEED);
-                player.damage(serverWorld, src, 0.5f);
-            }
+            if (stack != null) tryPassiveFeed(player, stack, damageTaken);
         });
     }
 
@@ -132,10 +132,11 @@ public final class HematicCatalyst extends Item {
 
         if (!bindIfNeeded(player, catalyst)) return;
         addHalfGrowth(catalyst, add);
+        damageForManualFeed(player, add);
 
-        // manual attempts always cost the needle once the payload is valid
-        EquipmentSlot slot = (needleHand == Hand.MAIN_HAND) ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND;
+        EquipmentSlot slot = NeedleStacks.slotForHand(needleHand);
         needle.damage(1, player, slot);
+        NeedleStacks.setInHand(player, needleHand, NeedleStacks.convertKeepingDamage(needle, Needle.NEEDLE));
     }
 
     private static int manualFeedHalfSteps(int hits, int total, boolean success) {
@@ -145,6 +146,13 @@ public final class HematicCatalyst extends Item {
         int reward = Math.round(PERFECT_MANUAL_FEED_HALF_STEPS * ratio);
         if (success) reward = PERFECT_MANUAL_FEED_HALF_STEPS;
         return Math.max(MIN_MANUAL_FEED_HALF_STEPS, reward);
+    }
+
+    private static void damageForManualFeed(ServerPlayerEntity player, int halfSteps) {
+        float ratio = Math.min(1.0f, halfSteps / (float) PERFECT_MANUAL_FEED_HALF_STEPS);
+        float damage = MIN_MANUAL_FEED_DAMAGE + ((MAX_MANUAL_FEED_DAMAGE - MIN_MANUAL_FEED_DAMAGE) * ratio);
+        var src = player.getEntityWorld().getDamageSources().create(ModDamageTypes.SUTURE_FEED);
+        player.damage(player.getEntityWorld(), src, damage);
     }
 
     // item id
@@ -360,10 +368,16 @@ public final class HematicCatalyst extends Item {
 
         if (!bindIfNeeded(player, stack)) return false;
 
-        stack.set(LAST_FEED_TICK, now);
-        addHalfGrowth(stack, PASSIVE_FEED_HALF_STEPS);
+        int halfSteps = passiveFeedHalfSteps(damageTaken);
+        if (halfSteps <= 0) return false;
 
+        stack.set(LAST_FEED_TICK, now);
+        addHalfGrowth(stack, halfSteps);
         return true;
+    }
+
+    private static int passiveFeedHalfSteps(float damageTaken) {
+        return Math.max(PASSIVE_FEED_HALF_STEPS, Math.round(damageTaken / PASSIVE_DAMAGE_PER_HALF_STEP));
     }
 
     private static boolean bindIfNeeded(PlayerEntity player, ItemStack stack) {

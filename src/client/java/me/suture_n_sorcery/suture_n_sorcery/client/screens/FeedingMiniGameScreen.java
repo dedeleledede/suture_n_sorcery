@@ -12,7 +12,7 @@ import java.util.Random;
 
 public final class FeedingMiniGameScreen extends Screen {
     // rope shape and feel
-    private static final int NODES = 140;
+    private static final int NODES = 90;
     private static final float SEG_LEN = 4.0f;
     private static final int SOLVER_ITERS = 6;
     private static final float DAMPING = 0.92f;
@@ -21,17 +21,17 @@ public final class FeedingMiniGameScreen extends Screen {
     private final boolean[] segLeftHit  = new boolean[CUT_SEGMENTS];
     private final boolean[] segRightHit = new boolean[CUT_SEGMENTS];
 
-    private static final float PULL_RESERVE = 40.0f;
+    private static final float PULL_RESERVE = 34.0f;
 
     // wound layout
     private static final float CUT_ZONE_R = 100.0f;
-    private static final int   CUT_SEGMENTS = 9;
+    private static final int   CUT_SEGMENTS = 8;
     private static final float CUT_STEP = 18.0f;
     private static final float CUT_BASE_GAP = 26.0f;
     private static final float EDGE_JITTER = 6.0f;
     private static final float HOOK_R = 9.0f;
 
-    private static final float MISS_PENALTY = 10.0f;
+    private static final float MISS_PENALTY = 18.0f;
 
     // seam center points
     private final float[] seamX = new float[CUT_SEGMENTS];
@@ -65,7 +65,7 @@ public final class FeedingMiniGameScreen extends Screen {
     }
 
     private static final float ROPE_MAX = (NODES - 1) * SEG_LEN;
-    private static final float THREAD_MARGIN = 1.35f;
+    private static final float THREAD_MARGIN = 1.08f;
 
     private int ropeEndSeg = -1;
     private int ropeEndSide = -1;
@@ -257,6 +257,10 @@ public final class FeedingMiniGameScreen extends Screen {
             obstacles.add(new Obstacle(targetX, targetY, 18.0f));
             return true;
         }
+        if (sutState == SutState.DONE && input.key() == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER) {
+            close();
+            return true;
+        }
         return super.keyPressed(input);
     }
 
@@ -275,6 +279,11 @@ public final class FeedingMiniGameScreen extends Screen {
     @Override
     public boolean mouseClicked(net.minecraft.client.gui.Click click, boolean doubled) {
         if (click.button() != 0) return super.mouseClicked(click, doubled);
+
+        if (sutState == SutState.DONE) {
+            close();
+            return true;
+        }
 
         if (sutState != SutState.STITCHING) return true;
         if (nubIndex < 0 || nubIndex >= nubSeq.size()) return true;
@@ -676,7 +685,11 @@ public final class FeedingMiniGameScreen extends Screen {
 
     private void enterPullToClose() {
         if (sutState != SutState.STITCHING) return;
-        if (hasAnyStitchedSegment()) return;
+        if (!hasAnyStitchedSegment()) {
+            sendResult(false);
+            sutState = SutState.DONE;
+            return;
+        }
 
         sutState = SutState.PULL_TO_CLOSE;
 
@@ -686,12 +699,7 @@ public final class FeedingMiniGameScreen extends Screen {
         timingArmed = false;
         zigSeg = -1;
 
-        // guarantee some slack for the pull gesture
-        float rem = threadMax - usedThread;
-        if (rem < PULL_RESERVE) {
-            threadMax = usedThread + PULL_RESERVE;
-            freeSegTarget = computeFreeSegTarget();
-        }
+        freeSegTarget = computeFreeSegTarget();
     }
 
     private float computePullTension() {
@@ -770,8 +778,9 @@ public final class FeedingMiniGameScreen extends Screen {
         int edgeCol = 0xFFAA3333;
         int seamCol = 0x66330000;
 
-        // seam fill (simple)
         for (int i = 0; i < CUT_SEGMENTS - 1; i++) {
+            if (!segmentIsRequired(i) || !segmentIsRequired(i + 1)) continue;
+
             int x0 = (int) seamX[i];
             int y0 = (int) seamY[i];
             int x1 = (int) seamX[i + 1];
@@ -779,8 +788,9 @@ public final class FeedingMiniGameScreen extends Screen {
             drawThickLine(ctx, x0, y0, x1, y1, 1.2f, seamCol);
         }
 
-        // edges
         for (int i = 0; i < CUT_SEGMENTS; i++) {
+            if (!segmentIsRequired(i)) continue;
+
             float lx = edgeX(i, 0), ly = edgeY(i, 0);
             float rx = edgeX(i, 1), ry = edgeY(i, 1);
 
@@ -801,7 +811,6 @@ public final class FeedingMiniGameScreen extends Screen {
             }
         }
 
-        // pending hook highlight
         if (timingEnabled && zigSeg >= 0) {
             float hx = edgeX(zigSeg, zigSide);
             float hy = edgeY(zigSeg, zigSide);
@@ -877,8 +886,13 @@ public final class FeedingMiniGameScreen extends Screen {
 
     private void drawClosureMeter(DrawContext ctx) {
         float sum = 0.0f;
-        for (int i = 0; i < CUT_SEGMENTS; i++) sum += closeT[i];
-        float avg = sum / (float) CUT_SEGMENTS;
+        int counted = 0;
+        for (int i = 0; i < CUT_SEGMENTS; i++) {
+            if (!segmentIsRequired(i)) continue;
+            sum += closeT[i];
+            counted++;
+        }
+        float avg = counted == 0 ? 0.0f : sum / (float) counted;
 
         int mx = 10, my = this.height - 20;
         int w = 120, h = 8;
@@ -888,6 +902,16 @@ public final class FeedingMiniGameScreen extends Screen {
         ctx.fill(mx, my, mx + (int)(w * clamp01(avg)), my + h, 0xB1FF0000);
 
         ctx.drawText(this.textRenderer, Text.literal("Closure " + (int)(avg * 100f) + "%"), mx, my - 10, 0xFFFFFFFF, true);
+        if (sutState == SutState.DONE) {
+            ctx.drawText(this.textRenderer, Text.literal("Click or press Enter to close"), mx, my - 22, 0xFFFFFFFF, true);
+        }
+    }
+
+    private boolean segmentIsRequired(int seg) {
+        for (Nub nub : nubSeq) {
+            if (nub.seg == seg) return true;
+        }
+        return false;
     }
 
     private void generateCut() {

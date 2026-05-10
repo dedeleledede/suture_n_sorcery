@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "suture_n_sorcery:bleeding"
+    "suture_n_sorcery:bleeding",
+    "suture_n_sorcery:suture_feed"
   ]
 }
