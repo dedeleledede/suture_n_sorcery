@@ -22,17 +22,12 @@ public abstract class LivingEntityBloodBreathingRedirectMixin {
             )
     )
     private boolean sns$bloodCountsAsWaterForAir(LivingEntity self, TagKey<Fluid> tag) {
-        // let vanilla handle all non-water checks normally
         boolean vanilla = self.isSubmergedIn(tag);
         if (tag != FluidTags.WATER) return vanilla;
-
-        // if actually in real water, keep vanilla true
         if (vanilla) return true;
-
-        // only on server (air logic matters there)
         if (!(self.getEntityWorld() instanceof ServerWorld world)) return false;
 
-        // eyes-in-blood check (slightly below eye to avoid surface false negatives)
+        // sample just below the eyes to avoid false negatives at the surface
         BlockPos eyePos = BlockPos.ofFloored(self.getX(), self.getEyeY() - 0.10D, self.getZ());
         return world.getFluidState(eyePos).isIn(ModFluidTags.CONCENTRATED_BLOOD_SWIM);
     }

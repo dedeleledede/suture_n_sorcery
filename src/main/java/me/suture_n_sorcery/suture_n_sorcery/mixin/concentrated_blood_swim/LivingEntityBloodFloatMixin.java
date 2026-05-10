@@ -14,11 +14,11 @@ public abstract class LivingEntityBloodFloatMixin {
 
     @Inject(method = "tickMovement", at = @At("TAIL"))
     private void sns$bloodBuoyancy(CallbackInfo ci) {
-        LivingEntity self = (LivingEntity)(Object)this;
+        LivingEntity self = (LivingEntity) (Object) this;
 
         if (self instanceof net.minecraft.entity.player.PlayerEntity) return;
 
-        if (((BloodFluidData) self).sns$isInBlood()) return;
+        if (!((BloodFluidData) self).sns$isInBlood()) return;
         if (self.isTouchingWater() || self.isInLava()) return;
 
         double h = self.getFluidHeight(ModFluidTags.CONCENTRATED_BLOOD_SWIM);

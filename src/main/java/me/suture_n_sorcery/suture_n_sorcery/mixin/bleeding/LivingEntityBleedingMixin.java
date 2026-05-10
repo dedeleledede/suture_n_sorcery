@@ -22,6 +22,7 @@ import net.minecraft.server.world.ServerWorld;
 
 @Mixin(LivingEntity.class)
 public abstract class LivingEntityBleedingMixin implements BleedingHolder {
+    @Unique private static final float MIN_BLEEDING_HIT_DAMAGE = 4.0f;
 
     @Unique private float suture_n_sorcery$bleedStoredDamage = 0.0f;
     @Unique private float suture_n_sorcery$bleedPreHealth = 0.0f;
@@ -47,24 +48,23 @@ public abstract class LivingEntityBleedingMixin implements BleedingHolder {
         LivingEntity self = (LivingEntity) (Object) this;
 
         if (self.getEntityWorld().isClient()) return;
-        if (!cir.getReturnValue()) return;              // damage not applied
-        if (self.getHealth() <= 0.0f) return;           // dead > dont convert
+        if (!cir.getReturnValue()) return;
+        if (self.getHealth() <= 0.0f) return;
         if (!suture_n_sorcery$isSharp(source)) return;
 
         float healthLost = this.suture_n_sorcery$bleedPreHealth - self.getHealth();
-        if (healthLost < 4.0f) return;
+        if (healthLost < MIN_BLEEDING_HIT_DAMAGE) return;
 
         boolean alreadyBleeding = self.hasStatusEffect(Bleeding.entry());
         int hitTier = Bleeding.tierForDamage(healthLost);
-        if (!alreadyBleeding && hitTier == 0) return; // no effect => no storage
+        if (!alreadyBleeding && hitTier == 0) return;
 
         if (!(self.getType().isIn(ModEntityTypeTags.BLEEDABLE) || self instanceof PlayerEntity)) return;
 
-// Convert immediate damage into stored DoT
+        // sharp burst damage is converted into a stored bleed pool
         self.setHealth(this.suture_n_sorcery$bleedPreHealth);
         this.suture_n_sorcery$addBleedStoredDamage(healthLost);
 
-// Ensure the effect exists if it didn’t already
         if (!alreadyBleeding) {
             self.addStatusEffect(new StatusEffectInstance(
                     Bleeding.entry(),
@@ -73,7 +73,6 @@ public abstract class LivingEntityBleedingMixin implements BleedingHolder {
                     false, false, true
             ));
         }
-
 
         int tier = Bleeding.tierForDamage(this.suture_n_sorcery$getBleedStoredDamage());
         if (tier == 0) return;

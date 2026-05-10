@@ -21,7 +21,6 @@ public abstract class LivingEntityBloodVanillaSwimMixin {
     @Shadow
     protected boolean jumping;
 
-
     @Unique
     private static boolean sns$flying(LivingEntity self) {
         return (self instanceof PlayerEntity p) && p.getAbilities().flying;
@@ -34,7 +33,7 @@ public abstract class LivingEntityBloodVanillaSwimMixin {
 
     @Redirect(
             method = "travel",
-            at = @At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;isTouchingWater()Z")
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;isTouchingWater()Z")
     )
     private boolean sns$touchingWaterForTravel(LivingEntity self) {
         if (sns$flying(self)) return self.isTouchingWater();
@@ -57,10 +56,9 @@ public abstract class LivingEntityBloodVanillaSwimMixin {
         return vanilla;
     }
 
-
     @Redirect(
             method = "tickMovement",
-            at = @At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;isTouchingWater()Z")
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;isTouchingWater()Z")
     )
     private boolean sns$touchingWaterForTickMovement(LivingEntity self) {
         if (sns$flying(self)) return self.isTouchingWater();
@@ -85,7 +83,7 @@ public abstract class LivingEntityBloodVanillaSwimMixin {
 
     @Redirect(
             method = "travelInFluid",
-            at = @At(value="INVOKE", target="Lnet/minecraft/entity/LivingEntity;isTouchingWater()Z")
+            at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/LivingEntity;isTouchingWater()Z")
     )
     private boolean sns$touchingWaterForTravelInFluid(LivingEntity self) {
         if (sns$flying(self)) return self.isTouchingWater();
@@ -94,19 +92,15 @@ public abstract class LivingEntityBloodVanillaSwimMixin {
 
     @Inject(method = "travelInFluid", at = @At("TAIL"))
     private void sns$noPassiveFloatInBlood(Vec3d movementInput, CallbackInfo ci) {
-        LivingEntity self = (LivingEntity)(Object)this;
+        LivingEntity self = (LivingEntity) (Object) this;
 
-        // only affect players (mobs keep normal buoyancy)
         if (!(self instanceof PlayerEntity)) return;
-
-        // ignore creative flight
         if (sns$flying(self)) return;
 
-        // only in blood, not in real water
         if (self.getFluidHeight(ModFluidTags.CONCENTRATED_BLOOD_SWIM) <= 0.0D) return;
         if (self.getFluidHeight(FluidTags.WATER) > 0.0D) return;
 
-        // if not pressing jump, kill passive upward buoyancy
+        // blood should not push players upward unless they are swimming
         if (!this.jumping) {
             Vec3d v = self.getVelocity();
             if (v.y > 0.0D) {

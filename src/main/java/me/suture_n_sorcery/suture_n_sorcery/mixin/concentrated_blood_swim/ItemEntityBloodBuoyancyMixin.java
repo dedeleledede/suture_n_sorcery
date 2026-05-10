@@ -14,7 +14,7 @@ public abstract class ItemEntityBloodBuoyancyMixin {
     @Inject(method = "tick", at = @At("TAIL"))
     private void sns$itemFloatInBlood(CallbackInfo ci) {
         ItemEntity self = (ItemEntity) (Object) this;
-        if (((BloodFluidData) self).sns$isInBlood()) return;
+        if (!((BloodFluidData) self).sns$isInBlood()) return;
 
         Vec3d v = self.getVelocity();
 

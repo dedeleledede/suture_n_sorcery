@@ -26,19 +26,17 @@ public abstract class EntityConcentratedBloodFluidMixin implements BloodFluidDat
     @Unique
     private boolean sns$inBlood;
 
-    // Run AFTER vanilla has cleared/rebuilt fluidHeight this tick
     @Inject(method = "baseTick", at = @At("TAIL"))
     private void sns$updateBloodFluidState(CallbackInfo ci) {
         Entity e = (Entity) (Object) this;
 
-        // no viscosity while creative-flying
         if (e instanceof PlayerEntity p && p.getAbilities().flying) {
             this.sns$inBlood = false;
             this.fluidHeight.put(ModFluidTags.CONCENTRATED_BLOOD_SWIM, 0.0D);
             return;
         }
 
-        // keep/tune later; main point is correct timing
+        // run after vanilla rebuilds fluid height so the tag state is current
         this.sns$inBlood = this.updateMovementInFluid(ModFluidTags.CONCENTRATED_BLOOD_SWIM, 0.014D);
 
         if (!this.sns$inBlood) {
@@ -49,6 +47,6 @@ public abstract class EntityConcentratedBloodFluidMixin implements BloodFluidDat
 
     @Override
     public boolean sns$isInBlood() {
-        return !sns$inBlood;
+        return sns$inBlood;
     }
 }

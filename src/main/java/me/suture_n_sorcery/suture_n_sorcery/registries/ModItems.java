@@ -2,28 +2,43 @@ package me.suture_n_sorcery.suture_n_sorcery.registries;
 
 import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserItem;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomItem;
-import me.suture_n_sorcery.suture_n_sorcery.items.*;
+import me.suture_n_sorcery.suture_n_sorcery.items.BoneMarrow;
+import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
+import me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze;
+import me.suture_n_sorcery.suture_n_sorcery.items.Gauze;
+import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.Needle;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.SutureNeedle;
+import net.minecraft.item.Item;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 
-public class ModItems{
-    public static void registerItems(){
+public final class ModItems {
+    private ModItems() {
+    }
 
-        //HAND ITEMS
+    public static void registerItems() {
+        registerHandItems();
+        registerBlockItems();
+    }
 
-        Registry.register(Registries.ITEM, Gauze.GAUZE_KEY,  Gauze.GAUZE);
-        Registry.register(Registries.ITEM, DirtyGauze.DIRTY_GAUZE_KEY, DirtyGauze.DIRTY_GAUZE);
-        Registry.register(Registries.ITEM, ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET_KEY, ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET);
-        Registry.register(Registries.ITEM, HematicCatalyst.HEMATIC_CATALYST_KEY, HematicCatalyst.HEMATIC_CATALYST);
-        Registry.register(Registries.ITEM, BoneMarrow.BONE_MARROW_KEY, BoneMarrow.BONE_MARROW);
-        Registry.register(Registries.ITEM, Needle.NEEDLE_KEY, Needle.NEEDLE);
-        Registry.register(Registries.ITEM, SutureNeedle.SUTURE_NEEDLE_KEY, SutureNeedle.SUTURE_NEEDLE);
+    private static void registerHandItems() {
+        register(Gauze.GAUZE_KEY, Gauze.GAUZE);
+        register(DirtyGauze.DIRTY_GAUZE_KEY, DirtyGauze.DIRTY_GAUZE);
+        register(ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET_KEY, ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET);
+        register(HematicCatalyst.HEMATIC_CATALYST_KEY, HematicCatalyst.HEMATIC_CATALYST);
+        register(BoneMarrow.BONE_MARROW_KEY, BoneMarrow.BONE_MARROW);
+        register(Needle.NEEDLE_KEY, Needle.NEEDLE);
+        register(SutureNeedle.SUTURE_NEEDLE_KEY, SutureNeedle.SUTURE_NEEDLE);
+    }
 
-        // BLOCK ITEMS
+    private static void registerBlockItems() {
+        register(CondenserItem.CONDENSATOR_ITEM_KEY, CondenserItem.CONDENSATOR_ITEM);
+        register(RitualLoomItem.RITUAL_LOOM_ITEM_KEY, RitualLoomItem.RITUAL_LOOM_ITEM);
+    }
 
-        Registry.register(Registries.ITEM, CondenserItem.CONDENSATOR_ITEM_KEY, CondenserItem.CONDENSATOR_ITEM);
-        Registry.register(Registries.ITEM, RitualLoomItem.RITUAL_LOOM_ITEM_KEY, RitualLoomItem.RITUAL_LOOM_ITEM);
+    private static void register(RegistryKey<Item> key, Item item) {
+        Registry.register(Registries.ITEM, key, item);
     }
 }

@@ -17,7 +17,12 @@ import net.minecraft.world.World;
 import java.util.Objects;
 
 public class Gauze extends Item {
-    public Gauze(Settings settings) { super(settings); }
+    private static final float STORED_BLEED_REDUCTION = 10.0f;
+    private static final int MAX_STACK_SIZE = 16;
+
+    public Gauze(Settings settings) {
+        super(settings);
+    }
 
     public static final Identifier GAUZE_ID =
             Identifier.of(Suture_n_sorcery.MOD_ID, "gauze");
@@ -27,7 +32,7 @@ public class Gauze extends Item {
 
     public static final Item GAUZE = new Gauze(new Item.Settings()
             .registryKey(GAUZE_KEY)
-            .maxCount(16)
+            .maxCount(MAX_STACK_SIZE)
     );
 
     @Override
@@ -39,7 +44,7 @@ public class Gauze extends Item {
                 && user instanceof BleedingHolder holder) {
 
             float stored = holder.suture_n_sorcery$getBleedStoredDamage();
-            float newStored = Math.max(0.0f, stored - 10.0f);
+            float newStored = Math.max(0.0f, stored - STORED_BLEED_REDUCTION);
             holder.suture_n_sorcery$setBleedStoredDamage(newStored);
 
             int amp = Objects.requireNonNull(user.getStatusEffect(Bleeding.entry())).getAmplifier();
@@ -47,28 +52,41 @@ public class Gauze extends Item {
             if (newStored <= 0.0f || amp <= 0) {
                 user.removeStatusEffect(Bleeding.entry());
             } else {
-                // optional: sync icon level immediately to remaining stored damage (not “-1”, real tier)
-                StatusEffectInstance inst = user.getStatusEffect(Bleeding.entry());
-                int tier = Bleeding.tierForDamage(newStored);
-                if (inst != null && tier > 0 && inst.getAmplifier() != (tier - 1)) {
-                    user.addStatusEffect(new StatusEffectInstance(
-                            Bleeding.entry(),
-                            inst.getDuration(),
-                            tier - 1,
-                            false, false, true
-                    ));
-                }
+                refreshBleedingTier(user, newStored);
             }
 
             if (!user.getAbilities().creativeMode) {
-                stack.decrement(1);
-                ItemStack dirty = new ItemStack(DirtyGauze.DIRTY_GAUZE);
-                if (!user.getInventory().insertStack(dirty)) user.dropItem(dirty, false);
+                consumeAndReturnDirtyGauze(user, stack);
             }
 
             return ActionResult.SUCCESS;
         }
 
         return ActionResult.PASS;
+    }
+
+    private static void refreshBleedingTier(PlayerEntity user, float storedBleed) {
+        StatusEffectInstance inst = user.getStatusEffect(Bleeding.entry());
+        int tier = Bleeding.tierForDamage(storedBleed);
+        if (inst == null || tier <= 0 || inst.getAmplifier() == (tier - 1)) return;
+
+        // keep the icon tier matched to the remaining stored bleed pool
+        user.addStatusEffect(new StatusEffectInstance(
+                Bleeding.entry(),
+                inst.getDuration(),
+                tier - 1,
+                false,
+                false,
+                true
+        ));
+    }
+
+    private static void consumeAndReturnDirtyGauze(PlayerEntity user, ItemStack stack) {
+        stack.decrement(1);
+
+        ItemStack dirty = new ItemStack(DirtyGauze.DIRTY_GAUZE);
+        if (!user.getInventory().insertStack(dirty)) {
+            user.dropItem(dirty, false);
+        }
     }
 }
