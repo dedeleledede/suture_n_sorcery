@@ -10,10 +10,9 @@ public final class NeedleStacks {
     private NeedleStacks() {}
 
     public static ItemStack convertKeepingDamage(ItemStack from, ItemConvertible toItem) {
-        // Copies components (name, enchantments, etc.) to the new item stack
+        // keep stack data when the needle swaps item forms
         ItemStack out = from.copyComponentsToNewStack(toItem, from.getCount());
 
-        // Durability transfer (works as long as both items use same maxDamage)
         out.setDamage(from.getDamage());
         return out;
     }

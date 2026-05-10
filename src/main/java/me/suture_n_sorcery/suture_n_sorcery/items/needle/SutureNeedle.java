@@ -33,23 +33,13 @@ public final class SutureNeedle extends Item {
         ItemStack needle = user.getStackInHand(hand);
         ItemStack catalyst = user.getStackInHand(other);
 
-        // requirements
         if (!catalyst.isOf(HematicCatalyst.HEMATIC_CATALYST)) return ActionResult.PASS;
         if (HematicCatalyst.isReady(catalyst)) return ActionResult.PASS;
-        if (user.getHealth() <= 6.0f) return ActionResult.FAIL; // <= 3 hearts
+        if (!HematicCatalyst.hasEnoughHealthToFeed(user)) return ActionResult.FAIL;
 
-        // only open UI on client
         if (!world.isClient()) return ActionResult.SUCCESS;
 
-        // pct (0..99) from 0.5-growth system: hu in 0..200 -> pct in 0..100
-        int g = HematicCatalyst.getGrowth(catalyst);
-        int h = catalyst.getOrDefault(HematicCatalyst.GROWTH_HALF, 0);
-        if (h != 0) h = 1;
-
-        int hu = g * 2 + h;                 // 0..200
-        int pct = (hu * 100) / 200;         // 0..100
-        if (pct > 99) pct = 99;
-
+        int pct = HematicCatalyst.feedingGrowthPercent(catalyst);
         int catalystHandOrdinal = (other == Hand.MAIN_HAND) ? 0 : 1;
 
         try {
