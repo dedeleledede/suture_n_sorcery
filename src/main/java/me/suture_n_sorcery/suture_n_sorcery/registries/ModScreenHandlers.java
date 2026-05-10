@@ -14,7 +14,7 @@ public final class ModScreenHandlers {
     public static ScreenHandlerType<CondenserScreenHandler> CONDENSER_SCREEN;
     public static ScreenHandlerType<RitualLoomScreenHandler> RITUAL_LOOM_SCREEN;
 
-    public static void registerScreenHandlers(){
+    public static void registerScreenHandlers() {
         CONDENSER_SCREEN = Registry.register(
                 Registries.SCREEN_HANDLER,
                 Identifier.of(Suture_n_sorcery.MOD_ID, "condenser"),
@@ -27,7 +27,7 @@ public final class ModScreenHandlers {
                 new ScreenHandlerType<>(RitualLoomScreenHandler::new, FeatureSet.empty())
         );
 
-        // Networking used by the ritual loom UI (press-and-hold "PRESSURIZE")
+        // screen payloads are registered with the handlers that use them
         ModNetworking.init();
     }
 }

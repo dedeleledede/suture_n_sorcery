@@ -9,13 +9,15 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 
 public record PressurizePayload(BlockPos pos, boolean pressed) implements CustomPayload {
-    public static final Id<PressurizePayload> ID = new Id<>(Identifier.of(Suture_n_sorcery.MOD_ID, "ritual_loom_pressurize"));
+    public static final Id<PressurizePayload> ID =
+            new Id<>(Identifier.of(Suture_n_sorcery.MOD_ID, "ritual_loom_pressurize"));
 
-    public static final PacketCodec<RegistryByteBuf, PressurizePayload> CODEC = PacketCodec.tuple(
-            BlockPos.PACKET_CODEC, PressurizePayload::pos,
-            PacketCodecs.BOOLEAN, PressurizePayload::pressed,
-            PressurizePayload::new
-    );
+    public static final PacketCodec<RegistryByteBuf, PressurizePayload> CODEC =
+            PacketCodec.tuple(
+                    BlockPos.PACKET_CODEC, PressurizePayload::pos,
+                    PacketCodecs.BOOLEAN, PressurizePayload::pressed,
+                    PressurizePayload::new
+            );
 
     @Override
     public Id<? extends CustomPayload> getId() {
