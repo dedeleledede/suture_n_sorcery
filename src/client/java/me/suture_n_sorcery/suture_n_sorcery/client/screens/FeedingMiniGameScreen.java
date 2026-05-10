@@ -12,7 +12,7 @@ import java.util.Random;
 
 public final class FeedingMiniGameScreen extends Screen {
     // rope shape and feel
-    private static final int NODES = 65;
+    private static final int NODES = 140;
     private static final float SEG_LEN = 4.0f;
     private static final int SOLVER_ITERS = 6;
     private static final float DAMPING = 0.92f;
@@ -107,16 +107,12 @@ public final class FeedingMiniGameScreen extends Screen {
     private static final float TIMING_WINDOW = 2.0f;
     private boolean chainMode = false;
 
-    // hematic stage controls how many stitch targets are required
-    private static final int STAGE_ONE_MAX_PCT = 33;
-    private static final int STAGE_TWO_MAX_PCT = 66;
-    private static final int STAGE_ONE_NUBS = 6;
-    private static final int STAGE_TWO_NUBS = 12;
-    private static final int STAGE_THREE_NUBS = 18;
+    // catalyst progress controls how many holes need stitching
+    private static final int MIN_STAGE_NUBS = 6;
+    private static final int MAX_STAGE_NUBS = 16;
 
     private int hematicPct = 0;
-    private int stageIndex = 0;
-    private int stageNubs = STAGE_ONE_NUBS;
+    private int stageNubs = MIN_STAGE_NUBS;
 
     private int hitFlashTicks = 0;
     private int missFlashTicks = 0;
@@ -171,10 +167,9 @@ public final class FeedingMiniGameScreen extends Screen {
 
     public FeedingMiniGameScreen setHematicPct(int pct) {
         hematicPct = Math.max(0, Math.min(99, pct));
-        int newStage = stageFromPct(hematicPct);
-        if (newStage != stageIndex) {
-            stageIndex = newStage;
-            stageNubs = nubsForStage(stageIndex);
+        int newNubs = nubsForPct(hematicPct);
+        if (newNubs != stageNubs) {
+            stageNubs = newNubs;
 
             buildNubSequence();
             recomputeThreadBudgetForCut();
@@ -183,16 +178,10 @@ public final class FeedingMiniGameScreen extends Screen {
         return this;
     }
 
-    private int stageFromPct(int pct) {
-        if (pct <= STAGE_ONE_MAX_PCT) return 0;
-        if (pct <= STAGE_TWO_MAX_PCT) return 1;
-        return 2;
-    }
-
-    private int nubsForStage(int stage) {
-        if (stage == 0) return STAGE_ONE_NUBS;
-        if (stage == 1) return STAGE_TWO_NUBS;
-        return STAGE_THREE_NUBS;
+    private int nubsForPct(int pct) {
+        int nubs = MIN_STAGE_NUBS + Math.round((MAX_STAGE_NUBS - MIN_STAGE_NUBS) * (pct / 99.0f));
+        if ((nubs & 1) == 1) nubs++;
+        return Math.min(MAX_STAGE_NUBS, nubs);
     }
 
     @Override
@@ -1086,8 +1075,8 @@ public final class FeedingMiniGameScreen extends Screen {
     private void recomputeThreadBudgetForCut() {
         float req = estimateNubSeqRequired();
 
-        // set max thread from the generated target path
-        threadMax = req * THREAD_MARGIN;
+        // perfect paths keep enough spare thread to pull the wound closed
+        threadMax = req * THREAD_MARGIN + PULL_RESERVE;
         usedThread = 0.0f;
 
         freeSegCurrent = freeSegTarget = computeFreeSegTarget();

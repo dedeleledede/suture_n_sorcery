@@ -10,7 +10,8 @@
     "concentrated_blood_swim.ItemEntityBloodBuoyancyMixin",
     "concentrated_blood_swim.LivingEntityBloodBreathingRedirectMixin",
     "concentrated_blood_swim.LivingEntityBloodFloatMixin",
-    "concentrated_blood_swim.LivingEntityBloodVanillaSwimMixin"
+    "concentrated_blood_swim.LivingEntityBloodVanillaSwimMixin",
+    "hematic.PlayerHematicBondMixin"
   ],
   "injectors": {
     "defaultRequire": 1

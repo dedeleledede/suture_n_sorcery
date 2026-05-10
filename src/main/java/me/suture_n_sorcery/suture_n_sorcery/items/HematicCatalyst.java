@@ -4,6 +4,7 @@ import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.SutureNeedle;
 import me.suture_n_sorcery.suture_n_sorcery.network.HematicFeedPayload;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModDamageTypes;
+import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
 
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
@@ -11,15 +12,17 @@ import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.Identifier;
+import net.minecraft.world.World;
 import net.minecraft.component.ComponentType;
 import net.minecraft.component.type.TooltipDisplayComponent;
-import net.minecraft.item.ItemStack;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.network.codec.PacketCodecs;
 import net.minecraft.registry.Registries;
@@ -37,18 +40,15 @@ public final class HematicCatalyst extends Item {
     }
 
     private static boolean FEED_NET_REGISTERED = false;
-    private static final int MAX_GROWTH = 150;
+    private static final int MAX_GROWTH = 100;
     private static final int READY_HALF_UNITS = 200;
     private static final int FEED_COOLDOWN_TICKS = 80;
     private static final float MIN_FEED_HEALTH = 6.0f;
-    private static final int SUCCESS_FEED_REWARD = 8;
-    private static final int PARTIAL_FEED_REWARD = 2;
+    private static final int PERFECT_MANUAL_FEED_HALF_STEPS = 14;
+    private static final int MIN_MANUAL_FEED_HALF_STEPS = 1;
     private static final int PASSIVE_FEED_HALF_STEPS = 1;
-    private static final int STAGE_ONE_MAX_GROWTH = 33;
-    private static final int STAGE_TWO_MAX_GROWTH = 66;
-    private static final int STAGE_ONE_NUBS = 6;
-    private static final int STAGE_TWO_NUBS = 12;
-    private static final int STAGE_THREE_NUBS = 18;
+    private static final int MIN_FEEDING_NUBS = 6;
+    private static final int MAX_FEEDING_NUBS = 16;
 
     // stack components
 
@@ -85,6 +85,7 @@ public final class HematicCatalyst extends Item {
             if (!(entity instanceof PlayerEntity player)) return;
             if (player.isCreative() || player.isSpectator()) return;
             if (damageTaken <= 0.0f) return;
+            if (hasAbsorbedCatalyst(player)) return;
 
             if (source.isOf(ModDamageTypes.SUTURE_FEED)) return;
 
@@ -122,20 +123,28 @@ public final class HematicCatalyst extends Item {
         if (!catalyst.isOf(HematicCatalyst.HEMATIC_CATALYST)) return;
         if (!isSutureNeedle(needle)) return;
 
+        if (!canPlayerUseCatalyst(player, catalyst)) return;
         if (!hasEnoughHealthToFeed(player)) return;
 
         int hits = Math.max(0, Math.min(payload.hits(), payload.total()));
-        boolean anyProgress = hits > 0;
+        int add = manualFeedHalfSteps(hits, payload.total(), payload.success());
+        if (add <= 0) return;
 
-        int add = 0;
-        if (payload.success()) add = SUCCESS_FEED_REWARD + hits;
-        else if (anyProgress) add = PARTIAL_FEED_REWARD;
-
-        if (add > 0) addGrowth(catalyst, add);
+        if (!bindIfNeeded(player, catalyst)) return;
+        addHalfGrowth(catalyst, add);
 
         // manual attempts always cost the needle once the payload is valid
         EquipmentSlot slot = (needleHand == Hand.MAIN_HAND) ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND;
         needle.damage(1, player, slot);
+    }
+
+    private static int manualFeedHalfSteps(int hits, int total, boolean success) {
+        if (hits <= 0 || total <= 0) return 0;
+
+        float ratio = Math.min(1.0f, hits / (float) total);
+        int reward = Math.round(PERFECT_MANUAL_FEED_HALF_STEPS * ratio);
+        if (success) reward = PERFECT_MANUAL_FEED_HALF_STEPS;
+        return Math.max(MIN_MANUAL_FEED_HALF_STEPS, reward);
     }
 
     // item id
@@ -145,6 +154,46 @@ public final class HematicCatalyst extends Item {
 
     public static final RegistryKey<Item> HEMATIC_CATALYST_KEY =
             RegistryKey.of(RegistryKeys.ITEM, HEMATIC_CATALYST_ID);
+
+    @Override
+    public ActionResult use(World world, PlayerEntity user, Hand hand) {
+        Hand other = oppositeHand(hand);
+        if (!isSutureNeedle(user.getStackInHand(other))) return ActionResult.PASS;
+        return useNeedleOnCatalyst(world, user, other, hand);
+    }
+
+    public static ActionResult useNeedleOnCatalyst(World world, PlayerEntity user, Hand needleHand, Hand catalystHand) {
+        ItemStack needle = user.getStackInHand(needleHand);
+        ItemStack catalyst = user.getStackInHand(catalystHand);
+
+        if (!isSutureNeedle(needle)) return ActionResult.PASS;
+        if (!catalyst.isOf(HEMATIC_CATALYST)) return ActionResult.PASS;
+        if (!canPlayerUseCatalyst(user, catalyst)) return ActionResult.FAIL;
+
+        if (isReady(catalyst)) {
+            if (world.isClient()) return ActionResult.SUCCESS;
+            return absorbCatalyst(user, catalyst) ? ActionResult.SUCCESS : ActionResult.FAIL;
+        }
+
+        if (!hasEnoughHealthToFeed(user)) return ActionResult.FAIL;
+        if (!world.isClient()) return ActionResult.SUCCESS;
+
+        openFeedingMiniGame(catalyst, catalystHand);
+        return ActionResult.SUCCESS;
+    }
+
+    private static void openFeedingMiniGame(ItemStack catalyst, Hand catalystHand) {
+        int pct = feedingGrowthPercent(catalyst);
+        int catalystHandOrdinal = (catalystHand == Hand.MAIN_HAND) ? 0 : 1;
+
+        try {
+            Class<?> bridge = Class.forName("me.suture_n_sorcery.suture_n_sorcery.client.items.SutureNeedleClientBridge");
+            bridge.getMethod("openFeedingMiniGame", int.class, int.class)
+                    .invoke(null, pct, catalystHandOrdinal);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Failed to open feeding minigame", e);
+        }
+    }
 
     private static <T> ComponentType<T> registerComponent(
             String path,
@@ -162,6 +211,11 @@ public final class HematicCatalyst extends Item {
         return !owner.isEmpty() && owner.equals(player.getUuidAsString());
     }
 
+    public static boolean hasAbsorbedCatalyst(PlayerEntity player) {
+        return player instanceof HematicBondHolder holder
+                && holder.suture_n_sorcery$hasAbsorbedHematicCatalyst();
+    }
+
     private static boolean hasOwnedCatalyst(PlayerEntity player) {
         var inv = player.getInventory();
         for (int i = 0; i < inv.size(); i++) {
@@ -172,6 +226,8 @@ public final class HematicCatalyst extends Item {
     }
 
     private static ItemStack findCatalystInInventory(PlayerEntity player) {
+        if (hasAbsorbedCatalyst(player)) return null;
+
         var inv = player.getInventory();
 
         // an owned catalyst should feed before a fresh unbound one
@@ -224,6 +280,31 @@ public final class HematicCatalyst extends Item {
         return Math.min(pct, 99);
     }
 
+    public static boolean canPlayerUseCatalyst(PlayerEntity player, ItemStack stack) {
+        if (!stack.isOf(HEMATIC_CATALYST)) return false;
+        if (hasAbsorbedCatalyst(player)) return false;
+
+        String owner = stack.getOrDefault(OWNER_UUID, "");
+        if (owner.isEmpty()) return !hasOwnedCatalyst(player);
+        return owner.equals(player.getUuidAsString());
+    }
+
+    public static boolean canAbsorbCatalyst(PlayerEntity player, ItemStack stack) {
+        return stack.isOf(HEMATIC_CATALYST)
+                && isReady(stack)
+                && isOwnedBy(stack, player)
+                && !hasAbsorbedCatalyst(player);
+    }
+
+    public static boolean absorbCatalyst(PlayerEntity player, ItemStack stack) {
+        if (!canAbsorbCatalyst(player, stack)) return false;
+        if (player instanceof HematicBondHolder holder) {
+            holder.suture_n_sorcery$setAbsorbedHematicCatalyst(true);
+        }
+        stack.decrement(1);
+        return true;
+    }
+
     private static int halfUnits(ItemStack stack) {
         int g = getGrowth(stack);
         int h = stack.getOrDefault(GROWTH_HALF, 0);
@@ -254,12 +335,11 @@ public final class HematicCatalyst extends Item {
         return ((hu & 1) == 1) ? (g + ".5") : Integer.toString(g);
     }
 
-    // catalyst stages mirror the feeding minigame target count
     public static int stageNubsFor(ItemStack stack) {
-        int g = getGrowth(stack);
-        if (g <= STAGE_ONE_MAX_GROWTH) return STAGE_ONE_NUBS;
-        if (g <= STAGE_TWO_MAX_GROWTH) return STAGE_TWO_NUBS;
-        return STAGE_THREE_NUBS;
+        int pct = feedingGrowthPercent(stack);
+        int nubs = MIN_FEEDING_NUBS + Math.round((MAX_FEEDING_NUBS - MIN_FEEDING_NUBS) * (pct / 99.0f));
+        if ((nubs & 1) == 1) nubs++;
+        return Math.min(MAX_FEEDING_NUBS, nubs);
     }
 
     private static boolean isSutureNeedle(ItemStack stack) {
@@ -271,26 +351,31 @@ public final class HematicCatalyst extends Item {
     private static boolean tryPassiveFeed(PlayerEntity player, ItemStack stack, float damageTaken) {
         if (!stack.isOf(HEMATIC_CATALYST)) return false;
         if (isReady(stack)) return false;
-
-        // ownership prevents a second player from filling a bound catalyst
-        String owner = stack.getOrDefault(OWNER_UUID, "");
-        String me = player.getUuidAsString();
-        if (!owner.isEmpty() && !owner.equals(me)) return false;
+        if (hasAbsorbedCatalyst(player)) return false;
+        if (!canPlayerUseCatalyst(player, stack)) return false;
 
         long now = player.getEntityWorld().getTime();
         long last = stack.getOrDefault(LAST_FEED_TICK, 0L);
         if (now - last < FEED_COOLDOWN_TICKS) return false;
 
-        // first feed binds the catalyst, but each player only gets one active owner
-        if (owner.isEmpty()) {
-            if (hasOwnedCatalyst(player)) return false;
-            stack.set(OWNER_UUID, me);
-        }
+        if (!bindIfNeeded(player, stack)) return false;
 
         stack.set(LAST_FEED_TICK, now);
         addHalfGrowth(stack, PASSIVE_FEED_HALF_STEPS);
 
         return true;
+    }
+
+    private static boolean bindIfNeeded(PlayerEntity player, ItemStack stack) {
+        String owner = stack.getOrDefault(OWNER_UUID, "");
+        if (!owner.isEmpty()) return owner.equals(player.getUuidAsString());
+        if (hasOwnedCatalyst(player)) return false;
+        stack.set(OWNER_UUID, player.getUuidAsString());
+        return true;
+    }
+
+    private static Hand oppositeHand(Hand hand) {
+        return (hand == Hand.MAIN_HAND) ? Hand.OFF_HAND : Hand.MAIN_HAND;
     }
 
     public static final Item HEMATIC_CATALYST = new HematicCatalyst(new Settings()

@@ -55,24 +55,11 @@ public abstract class LivingEntityBleedingMixin implements BleedingHolder {
         float healthLost = this.suture_n_sorcery$bleedPreHealth - self.getHealth();
         if (healthLost < MIN_BLEEDING_HIT_DAMAGE) return;
 
-        boolean alreadyBleeding = self.hasStatusEffect(Bleeding.entry());
-        int hitTier = Bleeding.tierForDamage(healthLost);
-        if (!alreadyBleeding && hitTier == 0) return;
-
         if (!(self.getType().isIn(ModEntityTypeTags.BLEEDABLE) || self instanceof PlayerEntity)) return;
 
         // sharp burst damage is converted into a stored bleed pool
         self.setHealth(this.suture_n_sorcery$bleedPreHealth);
         this.suture_n_sorcery$addBleedStoredDamage(healthLost);
-
-        if (!alreadyBleeding) {
-            self.addStatusEffect(new StatusEffectInstance(
-                    Bleeding.entry(),
-                    Bleeding.durationForTierTicks(hitTier),
-                    hitTier - 1,
-                    false, false, true
-            ));
-        }
 
         int tier = Bleeding.tierForDamage(this.suture_n_sorcery$getBleedStoredDamage());
         if (tier == 0) return;
