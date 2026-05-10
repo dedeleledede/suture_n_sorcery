@@ -1,5 +1,6 @@
 package me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom;
 
+import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTracker;
 import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModBlockEntities;
 
@@ -13,6 +14,7 @@ import net.minecraft.item.Items;
 import net.minecraft.screen.NamedScreenHandlerFactory;
 import net.minecraft.screen.PropertyDelegate;
 import net.minecraft.screen.ScreenHandler;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.storage.ReadView;
 import net.minecraft.storage.WriteView;
 import net.minecraft.text.Text;
@@ -397,6 +399,10 @@ public class RitualLoomBlockEntity extends BlockEntity implements SidedInventory
 
         coreNonce++;          // tells the client to play completion effects once
         phase = RitualLoomPhase.COMPLETE;
+
+        if (world instanceof ServerWorld serverWorld) {
+            BloodSenseTracker.recordRitual(serverWorld, pos, 70 + def.requiredStrings() * 3);
+        }
     }
 
     private boolean absorbBloodBucket() {

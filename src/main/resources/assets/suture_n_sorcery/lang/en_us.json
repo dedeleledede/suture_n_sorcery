@@ -29,5 +29,6 @@
   "death.attack.suture_n_sorcery.suture_feed.manual": "%1$s fed the catalyst past what their body could spare.",
 
   "key.category.suture_n_sorcery.main": "Suture & Sorcery",
-  "key.suture_n_sorcery.open_feeding_debug": "Open Feeding Debug"
+  "key.suture_n_sorcery.open_feeding_debug": "Open Feeding Debug",
+  "key.suture_n_sorcery.blood_sense": "Blood Sense"
 }

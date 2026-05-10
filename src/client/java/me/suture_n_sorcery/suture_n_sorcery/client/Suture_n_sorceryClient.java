@@ -1,5 +1,6 @@
 package me.suture_n_sorcery.suture_n_sorcery.client;
 
+import me.suture_n_sorcery.suture_n_sorcery.client.blood_sense.BloodSenseClient;
 import me.suture_n_sorcery.suture_n_sorcery.client.screens.CondenserScreen;
 import me.suture_n_sorcery.suture_n_sorcery.client.screens.RitualLoomScreen;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModScreenHandlers;
@@ -15,6 +16,7 @@ public class Suture_n_sorceryClient implements ClientModInitializer {
         ModRender.registerRender();
         ModShader.registerShader();
         registerScreens();
+        BloodSenseClient.registerBloodSenseClient();
         ModKeys.registerKeys();
     }
 

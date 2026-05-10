@@ -1,5 +1,6 @@
 package me.suture_n_sorcery.suture_n_sorcery;
 
+import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTracker;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomRitualHandler;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ItemGroups;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModBlockEntities;
@@ -45,5 +46,6 @@ public class Suture_n_sorcery implements ModInitializer {
         ModScreenHandlers.registerScreenHandlers();
         RitualLoomRitualHandler.registerRitualLoomRituals();
         ModSounds.registerSounds();
+        BloodSenseTracker.registerBloodSenseEvents();
     }
 }

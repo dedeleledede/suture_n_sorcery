@@ -1,6 +1,7 @@
 package me.suture_n_sorcery.suture_n_sorcery.client;
 
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
+import me.suture_n_sorcery.suture_n_sorcery.client.blood_sense.BloodSenseClient;
 import me.suture_n_sorcery.suture_n_sorcery.client.screens.FeedingDebugLauncherScreen;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -16,6 +17,7 @@ public class ModKeys{
             );
 
     private static KeyBinding OPEN_FEEDING_DEBUG;
+    private static KeyBinding ACTIVATE_BLOOD_SENSE;
 
     static void registerKeys(){
         OPEN_FEEDING_DEBUG =
@@ -26,10 +28,21 @@ public class ModKeys{
                                 SNS_CATEGORY
                         )
                 );
+        ACTIVATE_BLOOD_SENSE =
+                KeyBindingHelper.registerKeyBinding(
+                        new KeyBinding(
+                                "key.suture_n_sorcery.blood_sense",
+                                GLFW.GLFW_KEY_V,
+                                SNS_CATEGORY
+                        )
+                );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             while (OPEN_FEEDING_DEBUG.wasPressed()) { // consumes presses
                 client.setScreen(new FeedingDebugLauncherScreen(client.currentScreen));
+            }
+            while (ACTIVATE_BLOOD_SENSE.wasPressed()) {
+                BloodSenseClient.activate();
             }
         });
     }
