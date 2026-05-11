@@ -49,6 +49,7 @@ public final class BloodSenseClient {
     private static final int TRACE_EXPIRY_FADE_TICKS = 20 * 30;
     private static final float MAX_RADIUS = 16f;
     private static final float TRACE_EDGE_FADE_BLOCKS = 2.4f;
+    private static final float SPHERE_TEXTURE_TILES = 6f;
     private static final Identifier SPHERE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere.png");
     private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_trace_pillar.png");
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
@@ -238,21 +239,15 @@ public final class BloodSenseClient {
     private static float openingAmount(float age) {
         float firstPeak = 0.17f + pulseJitter * 0.035f;
         float recoil = 0.11f + pulseJitter * 0.025f;
-        float settle = recoil + 0.018f + pulseJitter * 0.012f;
 
-        if (age < 4f) {
-            return MathHelper.lerp(smooth(age / 4f), 0f, firstPeak);
+        if (age < 5f) {
+            return MathHelper.lerp(smoother(age / 5f), 0f, firstPeak);
         }
-        if (age < 14f) {
-            return MathHelper.lerp(smooth((age - 4f) / 10f), firstPeak, recoil);
-        }
-        if (age < 22f) {
-            float stop = 1f - (float)Math.pow(1f - MathHelper.clamp((age - 14f) / 8f, 0f, 1f), 3f);
-            return MathHelper.lerp(stop, recoil, settle);
+        if (age < 11f) {
+            return MathHelper.lerp(smoother((age - 5f) / 6f), firstPeak, recoil);
         }
 
-        float normal = smooth(MathHelper.clamp((age - 22f) / (PULSE_TICKS - 22f), 0f, 1f));
-        return MathHelper.lerp(normal, settle, 1f);
+        return MathHelper.lerp(smoother(MathHelper.clamp((age - 11f) / (PULSE_TICKS - 11f), 0f, 1f)), recoil, 1f);
     }
 
     private static float animatedAge(float tickProgress) {
@@ -310,10 +305,10 @@ public final class BloodSenseClient {
                 double phi0 = Math.PI * 2.0 * u0;
                 double phi1 = Math.PI * 2.0 * u1;
 
-                addSphereVertex(entry, vertices, world, center, radius, theta0, phi0, (float) u0, (float) v0, alpha);
-                addSphereVertex(entry, vertices, world, center, radius, theta0, phi1, (float) u1, (float) v0, alpha);
-                addSphereVertex(entry, vertices, world, center, radius, theta1, phi1, (float) u1, (float) v1, alpha);
-                addSphereVertex(entry, vertices, world, center, radius, theta1, phi0, (float) u0, (float) v1, alpha);
+                addSphereVertex(entry, vertices, world, center, radius, theta0, phi0, (float) u0 * SPHERE_TEXTURE_TILES, (float) v0 * SPHERE_TEXTURE_TILES, alpha);
+                addSphereVertex(entry, vertices, world, center, radius, theta0, phi1, (float) u1 * SPHERE_TEXTURE_TILES, (float) v0 * SPHERE_TEXTURE_TILES, alpha);
+                addSphereVertex(entry, vertices, world, center, radius, theta1, phi1, (float) u1 * SPHERE_TEXTURE_TILES, (float) v1 * SPHERE_TEXTURE_TILES, alpha);
+                addSphereVertex(entry, vertices, world, center, radius, theta1, phi0, (float) u0 * SPHERE_TEXTURE_TILES, (float) v1 * SPHERE_TEXTURE_TILES, alpha);
             }
         }
     }
@@ -427,6 +422,11 @@ public final class BloodSenseClient {
     private static float smooth(float value) {
         float clamped = MathHelper.clamp(value, 0f, 1f);
         return clamped * clamped * (3f - 2f * clamped);
+    }
+
+    private static float smoother(float value) {
+        float clamped = MathHelper.clamp(value, 0f, 1f);
+        return clamped * clamped * clamped * (clamped * (clamped * 6f - 15f) + 10f);
     }
 
     private static float traceVisualMass(int strength) {
