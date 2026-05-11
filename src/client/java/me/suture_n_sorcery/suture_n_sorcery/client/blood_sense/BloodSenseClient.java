@@ -1,10 +1,13 @@
 package me.suture_n_sorcery.suture_n_sorcery.client.blood_sense;
 
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.HematicBondPayload;
+import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -18,6 +21,7 @@ import net.minecraft.client.render.BuiltBuffer;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.network.ClientPlayerEntity;
+import net.minecraft.client.render.RenderPhase;
 import net.minecraft.client.render.RenderLayer;
 import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexConsumer;
@@ -29,6 +33,9 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
+import net.minecraft.world.BlockView;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,6 +44,7 @@ public final class BloodSenseClient {
 
     private static final int DURATION_TICKS = 20 * 6;
     private static final int PULSE_TICKS = 38;
+    private static final int FADE_OUT_TICKS = 36;
     private static final int TRACE_LIFETIME_TICKS = 20 * 60 * 12;
     private static final int TRACE_EXPIRY_FADE_TICKS = 20 * 30;
     private static final float MAX_RADIUS = 16f;
@@ -44,8 +52,16 @@ public final class BloodSenseClient {
     private static final Identifier SPHERE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere.png");
     private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_trace_pillar.png");
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
+    private static final RenderPhase.TextureBase FRAMEBUFFER_TEXTURE = new RenderPhase.TextureBase(
+            // bind the current world color buffer so the sphere can bend the scene behind it.
+            () -> RenderSystem.setShaderTexture(0, outputView(MinecraftClient.getInstance())),
+            () -> RenderSystem.setShaderTexture(0, null)
+    ) {
+    };
 
     private static int remainingTicks = 0;
+    private static int fadeOutTicks = 0;
+    private static float pulseJitter = 0.5f;
     private static final List<ClientTrace> visibleTraces = new ArrayList<>();
 
     private BloodSenseClient() {
@@ -55,8 +71,13 @@ public final class BloodSenseClient {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (remainingTicks > 0 && !client.isPaused()) {
                 remainingTicks--;
+                if (remainingTicks == 0) {
+                    fadeOutTicks = FADE_OUT_TICKS;
+                }
+            } else if (fadeOutTicks > 0 && !client.isPaused()) {
+                fadeOutTicks--;
             }
-            if (remainingTicks <= 0) visibleTraces.clear();
+            if (remainingTicks <= 0 && fadeOutTicks <= 0) visibleTraces.clear();
         });
 
         WorldRenderEvents.AFTER_ENTITIES.register(BloodSenseClient::renderWorldSense);
@@ -82,11 +103,11 @@ public final class BloodSenseClient {
     }
 
     public static boolean isActive() {
-        return remainingTicks > 0;
+        return remainingTicks > 0 || fadeOutTicks > 0;
     }
 
     public static float activeAmount() {
-        return Math.min(1f, remainingTicks / (float)DURATION_TICKS);
+        return currentStrength(MinecraftClient.getInstance().getRenderTickCounter().getTickProgress(false));
     }
 
     private static void renderInventoryMarker(Screen screen, DrawContext context, int mouseX, int mouseY, float tickDelta) {
@@ -117,6 +138,8 @@ public final class BloodSenseClient {
             ));
         }
         remainingTicks = DURATION_TICKS;
+        fadeOutTicks = 0;
+        pulseJitter = (System.nanoTime() & 1023L) / 1023f;
     }
 
     private static void syncHematicBond(MinecraftClient client, boolean absorbed) {
@@ -127,17 +150,19 @@ public final class BloodSenseClient {
 
     private static void renderWorldSense(WorldRenderContext context) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (remainingTicks <= 0 || client.world == null || client.player == null) return;
+        if (!isActive() || client.world == null || client.player == null) return;
 
-        int age = DURATION_TICKS - remainingTicks;
-        float pulse01 = Math.min(1f, age / (float)PULSE_TICKS);
-        float radius = MAX_RADIUS * smooth(pulse01);
         float tickProgress = client.getRenderTickCounter().getTickProgress(false);
-        float strength = Math.min(1f, (remainingTicks + tickProgress) / (float)DURATION_TICKS);
+        float age = animatedAge(tickProgress);
+        float open = openingAmount(age);
+        float fade = fadeAmount(tickProgress);
+        float strength = open * fade;
+        float radius = MAX_RADIUS * open * fade;
 
         MatrixStack matrices = context.matrices();
         Vec3d camera = client.gameRenderer.getCamera().getPos();
         Vec3d center = client.player.getLerpedPos(tickProgress).add(0.0, 1.0, 0.0);
+        drawScreenRefraction(client, center, radius, strength);
 
         matrices.push();
         matrices.translate(-camera.x, -camera.y, -camera.z);
@@ -145,10 +170,50 @@ public final class BloodSenseClient {
         MatrixStack.Entry entry = matrices.peek();
         RenderLayer sphereLayer = RenderLayer.getEnergySwirl(SPHERE_TEXTURE, age * 0.012f, age * 0.004f);
         RenderLayer pillarLayer = RenderLayer.getEnergySwirl(PILLAR_TEXTURE, age * 0.006f, age * 0.018f);
-        drawLayer(sphereLayer, vertices -> drawShaderSphere(entry, vertices, center, radius, strength, age));
-        drawLayer(pillarLayer, vertices -> drawTracePillars(entry, vertices, client.player, radius, strength, age));
+        RenderLayer sphereRefractionLayer = bloodSenseSphereRefractionLayer();
+        drawLayer(sphereRefractionLayer, vertices -> drawRefractionSphere(entry, vertices, center, radius, strength));
+        drawLayer(sphereLayer, vertices -> drawShaderSphere(entry, vertices, client.world, center, radius, strength));
+        drawLayer(pillarLayer, vertices -> drawTracePillars(entry, vertices, client.player, radius, strength, (int)age));
 
         matrices.pop();
+    }
+
+    private static RenderLayer bloodSenseRefractionLayer() {
+        RenderLayer.MultiPhaseParameters parameters = RenderLayer.MultiPhaseParameters.builder()
+                .texture(FRAMEBUFFER_TEXTURE)
+                .lightmap(RenderPhase.ENABLE_LIGHTMAP)
+                .overlay(RenderPhase.ENABLE_OVERLAY_COLOR)
+                .target(RenderPhase.MAIN_TARGET)
+                .build(false);
+        return RenderLayer.of("suture_n_sorcery_blood_sense_refraction", 1536, false, true, ModShader.BLOOD_SENSE_REFRACTION, parameters);
+    }
+
+    private static RenderLayer bloodSenseSphereRefractionLayer() {
+        RenderLayer.MultiPhaseParameters parameters = RenderLayer.MultiPhaseParameters.builder()
+                .texture(FRAMEBUFFER_TEXTURE)
+                .lightmap(RenderPhase.ENABLE_LIGHTMAP)
+                .overlay(RenderPhase.ENABLE_OVERLAY_COLOR)
+                .target(RenderPhase.MAIN_TARGET)
+                .build(false);
+        return RenderLayer.of("suture_n_sorcery_blood_sense_sphere_refraction", 1536, false, true, ModShader.BLOOD_SENSE_SPHERE_REFRACTION, parameters);
+    }
+
+    private static void drawScreenRefraction(MinecraftClient client, Vec3d center, float radius, float strength) {
+        ScreenBubble bubble = projectBubble(client, center, radius);
+        if (bubble == null || strength <= 0.001f) return;
+
+        RenderLayer layer = bloodSenseRefractionLayer();
+        int cx = Math.clamp((int)(bubble.x * 255f), 0, 255);
+        int cy = Math.clamp((int)(bubble.y * 255f), 0, 255);
+        int cr = Math.clamp((int)(bubble.radius * 255f), 0, 255);
+        int ca = Math.clamp((int)(strength * 255f), 0, 255);
+
+        drawLayer(layer, vertices -> {
+            vertices.vertex(-1f, -1f, 0f).texture(0f, 0f).color(cx, cy, cr, ca);
+            vertices.vertex(1f, -1f, 0f).texture(1f, 0f).color(cx, cy, cr, ca);
+            vertices.vertex(1f, 1f, 0f).texture(1f, 1f).color(cx, cy, cr, ca);
+            vertices.vertex(-1f, 1f, 0f).texture(0f, 1f).color(cx, cy, cr, ca);
+        });
     }
 
     private static void drawLayer(RenderLayer layer, LayerDraw draw) {
@@ -160,13 +225,78 @@ public final class BloodSenseClient {
         }
     }
 
-    private static void drawShaderSphere(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, float strength, int age) {
+    private static GpuTextureView outputView(MinecraftClient client) {
+        GpuTextureView override = RenderSystem.outputColorTextureOverride;
+        return override != null ? override : client.getFramebuffer().getColorAttachmentView();
+    }
+
+    private static float currentStrength(float tickProgress) {
+        float open = openingAmount(animatedAge(tickProgress));
+        return open * fadeAmount(tickProgress);
+    }
+
+    private static float openingAmount(float age) {
+        float firstPeak = 0.17f + pulseJitter * 0.035f;
+        float recoil = 0.11f + pulseJitter * 0.025f;
+        float settle = recoil + 0.018f + pulseJitter * 0.012f;
+
+        if (age < 4f) {
+            return MathHelper.lerp(smooth(age / 4f), 0f, firstPeak);
+        }
+        if (age < 14f) {
+            return MathHelper.lerp(smooth((age - 4f) / 10f), firstPeak, recoil);
+        }
+        if (age < 22f) {
+            float stop = 1f - (float)Math.pow(1f - MathHelper.clamp((age - 14f) / 8f, 0f, 1f), 3f);
+            return MathHelper.lerp(stop, recoil, settle);
+        }
+
+        float normal = smooth(MathHelper.clamp((age - 22f) / (PULSE_TICKS - 22f), 0f, 1f));
+        return MathHelper.lerp(normal, settle, 1f);
+    }
+
+    private static float animatedAge(float tickProgress) {
+        if (remainingTicks > 0) {
+            return DURATION_TICKS - remainingTicks + tickProgress;
+        }
+        return DURATION_TICKS + FADE_OUT_TICKS - fadeOutTicks + tickProgress;
+    }
+
+    private static float fadeAmount(float tickProgress) {
+        if (remainingTicks > 0) return 1f;
+        return smooth(MathHelper.clamp((fadeOutTicks - tickProgress) / (float)FADE_OUT_TICKS, 0f, 1f));
+    }
+
+    private static ScreenBubble projectBubble(MinecraftClient client, Vec3d center, float radius) {
+        Vec3d cameraPos = client.gameRenderer.getCamera().getPos();
+        Vec3d relative = center.subtract(cameraPos);
+        Vector3f view = new Vector3f((float)relative.x, (float)relative.y, (float)relative.z);
+        Quaternionf inverseCamera = new Quaternionf(client.gameRenderer.getCamera().getRotation()).conjugate();
+        view.rotate(inverseCamera);
+
+        float depth = -view.z();
+        if (depth <= 0.05f) return null;
+
+        float aspect = client.getWindow().getFramebufferWidth() / (float)Math.max(1, client.getWindow().getFramebufferHeight());
+        float fov = client.options.getFov().getValue();
+        float focal = (float)(1.0 / Math.tan(Math.toRadians(fov) * 0.5));
+        float ndcX = (view.x() * focal / aspect) / depth;
+        float ndcY = (view.y() * focal) / depth;
+        float screenRadius = MathHelper.clamp((radius * focal / depth) * 0.5f, 0f, 1.2f);
+
+        return new ScreenBubble(
+                MathHelper.clamp(ndcX * 0.5f + 0.5f, 0f, 1f),
+                MathHelper.clamp(ndcY * 0.5f + 0.5f, 0f, 1f),
+                screenRadius
+        );
+    }
+
+    private static void drawShaderSphere(MatrixStack.Entry entry, VertexConsumer vertices, BlockView world, Vec3d center, float radius, float strength) {
         if (radius <= 0.35f) return;
 
-        int alpha = Math.clamp((int)(92 * strength), 24, 92);
+        int alpha = Math.clamp((int)(92 * strength), 0, 112);
         int latitudeSteps = 12;
         int longitudeSteps = 32;
-        float wobble = 1.0f + 0.018f * MathHelper.sin(age * 0.38f);
 
         for (int lat = 0; lat < latitudeSteps; lat++) {
             double v0 = lat / (double) latitudeSteps;
@@ -180,33 +310,88 @@ public final class BloodSenseClient {
                 double phi0 = Math.PI * 2.0 * u0;
                 double phi1 = Math.PI * 2.0 * u1;
 
-                addSphereVertex(entry, vertices, center, radius * wobble, theta0, phi0, (float) u0, (float) v0, alpha, age);
-                addSphereVertex(entry, vertices, center, radius * wobble, theta0, phi1, (float) u1, (float) v0, alpha, age);
-                addSphereVertex(entry, vertices, center, radius * wobble, theta1, phi1, (float) u1, (float) v1, alpha, age);
-                addSphereVertex(entry, vertices, center, radius * wobble, theta1, phi0, (float) u0, (float) v1, alpha, age);
+                addSphereVertex(entry, vertices, world, center, radius, theta0, phi0, (float) u0, (float) v0, alpha);
+                addSphereVertex(entry, vertices, world, center, radius, theta0, phi1, (float) u1, (float) v0, alpha);
+                addSphereVertex(entry, vertices, world, center, radius, theta1, phi1, (float) u1, (float) v1, alpha);
+                addSphereVertex(entry, vertices, world, center, radius, theta1, phi0, (float) u0, (float) v1, alpha);
             }
         }
     }
 
-    private static void addSphereVertex(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, double theta, double phi, float u, float v, int alpha, int age) {
+    private static void drawRefractionSphere(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, float strength) {
+        if (radius <= 0.35f) return;
+
+        int alpha = Math.clamp((int)(255 * strength), 0, 255);
+        int radiusByte = Math.clamp((int)((radius / MAX_RADIUS) * 255f), 0, 255);
+        int latitudeSteps = 16;
+        int longitudeSteps = 40;
+
+        for (int lat = 0; lat < latitudeSteps; lat++) {
+            double v0 = lat / (double) latitudeSteps;
+            double v1 = (lat + 1) / (double) latitudeSteps;
+            double theta0 = -Math.PI / 2.0 + Math.PI * v0;
+            double theta1 = -Math.PI / 2.0 + Math.PI * v1;
+
+            for (int lon = 0; lon < longitudeSteps; lon++) {
+                double u0 = lon / (double) longitudeSteps;
+                double u1 = (lon + 1) / (double) longitudeSteps;
+                double phi0 = Math.PI * 2.0 * u0;
+                double phi1 = Math.PI * 2.0 * u1;
+
+                addRefractionSphereVertex(entry, vertices, center, radius, theta0, phi0, radiusByte, alpha);
+                addRefractionSphereVertex(entry, vertices, center, radius, theta0, phi1, radiusByte, alpha);
+                addRefractionSphereVertex(entry, vertices, center, radius, theta1, phi1, radiusByte, alpha);
+                addRefractionSphereVertex(entry, vertices, center, radius, theta1, phi0, radiusByte, alpha);
+            }
+        }
+    }
+
+    private static void addRefractionSphereVertex(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, double theta, double phi, int radiusByte, int alpha) {
+        float nx = (float)(Math.cos(theta) * Math.cos(phi));
+        float ny = (float)Math.sin(theta);
+        float nz = (float)(Math.cos(theta) * Math.sin(phi));
+        float x = (float)(center.x + nx * radius);
+        float y = (float)(center.y + ny * radius);
+        float z = (float)(center.z + nz * radius);
+
+        vertices.vertex(entry, x, y, z)
+                .color(radiusByte, 255, 255, alpha)
+                .texture(0f, 0f)
+                .overlay(OverlayTexture.DEFAULT_UV)
+                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
+                .normal(entry, nx, ny, nz);
+    }
+
+    private static void addSphereVertex(MatrixStack.Entry entry, VertexConsumer vertices, BlockView world, Vec3d center, float radius, double theta, double phi, float u, float v, int alpha) {
         float nx = (float)(Math.cos(theta) * Math.cos(phi));
         float ny = (float)Math.sin(theta);
         float nz = (float)(Math.cos(theta) * Math.sin(phi));
 
-        float waveA = MathHelper.sin((float)(phi * 5.0 + theta * 2.0 + age * 0.22f));
-        float waveB = MathHelper.sin((float)(phi * -3.0 + theta * 7.0 + age * 0.13f));
-        float warpedRadius = radius * (1.0f + waveA * 0.026f + waveB * 0.014f);
-
-        float x = (float)(center.x + nx * warpedRadius);
-        float y = (float)(center.y + ny * warpedRadius);
-        float z = (float)(center.z + nz * warpedRadius);
+        float x = (float)(center.x + nx * radius);
+        float y = (float)(center.y + ny * radius);
+        float z = (float)(center.z + nz * radius);
+        float contact = contactAmount(world, x, y, z, ny);
+        int contactAlpha = Math.clamp((int)(alpha * (1.0f + contact * 1.25f)), 0, 255);
+        int red = Math.clamp((int)(255 - contact * 15), 220, 255);
+        int green = Math.clamp((int)(38 + contact * 28), 38, 78);
+        int blue = Math.clamp((int)(54 + contact * 42), 54, 112);
 
         vertices.vertex(entry, x, y, z)
-                .color(255, 38, 54, alpha)
+                .color(red, green, blue, contactAlpha)
                 .texture(u, v)
                 .overlay(OverlayTexture.DEFAULT_UV)
                 .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
                 .normal(entry, nx, ny, nz);
+    }
+
+    private static float contactAmount(BlockView world, float x, float y, float z, float normalY) {
+        BlockPos below = BlockPos.ofFloored(x, y - 0.18f, z);
+        BlockPos inside = BlockPos.ofFloored(x, y, z);
+        boolean touchesBlock = world.getBlockState(below).isSolidBlock(world, below) || world.getBlockState(inside).isSolidBlock(world, inside);
+        if (!touchesBlock) return 0f;
+
+        float lowerHemisphere = MathHelper.clamp((-normalY + 0.35f) / 1.35f, 0f, 1f);
+        return smooth(lowerHemisphere);
     }
 
     private static void drawTracePillars(MatrixStack.Entry entry, VertexConsumer vertices, ClientPlayerEntity player, float radius, float strength, int scanAge) {
@@ -253,7 +438,7 @@ public final class BloodSenseClient {
     private static void updateTraceVisibility(ClientTrace trace, float distance, float radius, int scanAge) {
         float edge = MathHelper.clamp((radius - distance + TRACE_EDGE_FADE_BLOCKS) / TRACE_EDGE_FADE_BLOCKS, 0f, 1f);
         float entryFade = smooth(edge);
-        float durationFade = smooth(MathHelper.clamp(remainingTicks / 20f, 0f, 1f));
+        float durationFade = currentStrength(0f);
 
         int clientAge = trace.ageTicks + scanAge;
         float expiryFade = 1f;
@@ -303,5 +488,8 @@ public final class BloodSenseClient {
     @FunctionalInterface
     private interface LayerDraw {
         void draw(VertexConsumer vertices);
+    }
+
+    private record ScreenBubble(float x, float y, float radius) {
     }
 }

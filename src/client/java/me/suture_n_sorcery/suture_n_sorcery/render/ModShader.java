@@ -9,6 +9,8 @@ import net.minecraft.util.Identifier;
 
 public final class ModShader {
     public static RenderPipeline SHOCKWAVE;
+    public static RenderPipeline BLOOD_SENSE_REFRACTION;
+    public static RenderPipeline BLOOD_SENSE_SPHERE_REFRACTION;
 
     private ModShader() {
     }
@@ -22,6 +24,30 @@ public final class ModShader {
                         .withSampler("Sampler0")
                         .withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
                         .withUsePipelineDrawModeForGui(true)
+                        .build()
+        );
+        BLOOD_SENSE_REFRACTION = RenderPipelines.register(
+                RenderPipeline.builder(RenderPipelines.POSITION_TEX_COLOR_SNIPPET)
+                        .withLocation(Identifier.of(Suture_n_sorcery.MOD_ID, "pipeline/blood_sense_refraction"))
+                        .withVertexShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/blood_sense_refraction"))
+                        .withFragmentShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/blood_sense_refraction"))
+                        .withSampler("Sampler0")
+                        .withBlend(com.mojang.blaze3d.pipeline.BlendFunction.TRANSLUCENT)
+                        .withDepthWrite(false)
+                        .withVertexFormat(VertexFormats.POSITION_TEXTURE_COLOR, VertexFormat.DrawMode.QUADS)
+                        .build()
+        );
+        BLOOD_SENSE_SPHERE_REFRACTION = RenderPipelines.register(
+                RenderPipeline.builder(RenderPipelines.ENTITY_SNIPPET)
+                        .withLocation(Identifier.of(Suture_n_sorcery.MOD_ID, "pipeline/blood_sense_sphere_refraction"))
+                        .withVertexShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/blood_sense_sphere_refraction"))
+                        .withFragmentShader(Identifier.of(Suture_n_sorcery.MOD_ID, "core/blood_sense_sphere_refraction"))
+                        .withSampler("Sampler0")
+                        .withSampler("Sampler2")
+                        .withCull(false)
+                        .withBlend(com.mojang.blaze3d.pipeline.BlendFunction.TRANSLUCENT)
+                        .withDepthWrite(false)
+                        .withVertexFormat(VertexFormats.POSITION_COLOR_TEXTURE_OVERLAY_LIGHT_NORMAL, VertexFormat.DrawMode.QUADS)
                         .build()
         );
     }

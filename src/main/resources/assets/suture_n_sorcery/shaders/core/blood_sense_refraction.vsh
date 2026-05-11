@@ -1,0 +1,14 @@
+#version 330
+
+in vec3 Position;
+in vec2 UV0;
+in vec4 Color;
+
+out vec2 v_uv;
+out vec4 v_param;
+
+void main() {
+    gl_Position = vec4(Position.xy, 0.0, 1.0);
+    v_uv = UV0;
+    v_param = Color;
+}
