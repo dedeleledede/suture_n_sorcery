@@ -50,8 +50,10 @@ public final class BloodSenseClient {
     private static final float MAX_RADIUS = 16f;
     private static final float TRACE_EDGE_FADE_BLOCKS = 2.4f;
     private static final float SPHERE_TEXTURE_TILES = 6f;
+    private static final float INNER_SPHERE_SCALE = 0.62f;
+    private static final float PILLAR_TEXTURE_ASPECT = 26f / 64f;
     private static final Identifier SPHERE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere.png");
-    private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_trace_pillar.png");
+    private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar.png");
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
     private static final RenderPhase.TextureBase FRAMEBUFFER_TEXTURE = new RenderPhase.TextureBase(
             // bind the current world color buffer so the sphere can bend the scene behind it.
@@ -173,6 +175,7 @@ public final class BloodSenseClient {
         RenderLayer pillarLayer = RenderLayer.getEnergySwirl(PILLAR_TEXTURE, age * 0.006f, age * 0.018f);
         RenderLayer sphereRefractionLayer = bloodSenseSphereRefractionLayer();
         drawLayer(sphereRefractionLayer, vertices -> drawRefractionSphere(entry, vertices, center, radius, strength));
+        drawLayer(sphereLayer, vertices -> drawInnerSphere(entry, vertices, center, radius, strength));
         drawLayer(sphereLayer, vertices -> drawShaderSphere(entry, vertices, client.world, center, radius, strength));
         drawLayer(pillarLayer, vertices -> drawTracePillars(entry, vertices, client.player, radius, strength, (int)age));
 
@@ -313,6 +316,34 @@ public final class BloodSenseClient {
         }
     }
 
+    private static void drawInnerSphere(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, float strength) {
+        float innerRadius = radius * INNER_SPHERE_SCALE;
+        if (innerRadius <= 0.35f) return;
+
+        int alpha = Math.clamp((int)(58 * strength), 0, 78);
+        int latitudeSteps = 10;
+        int longitudeSteps = 28;
+
+        for (int lat = 0; lat < latitudeSteps; lat++) {
+            double v0 = lat / (double) latitudeSteps;
+            double v1 = (lat + 1) / (double) latitudeSteps;
+            double theta0 = -Math.PI / 2.0 + Math.PI * v0;
+            double theta1 = -Math.PI / 2.0 + Math.PI * v1;
+
+            for (int lon = 0; lon < longitudeSteps; lon++) {
+                double u0 = lon / (double) longitudeSteps;
+                double u1 = (lon + 1) / (double) longitudeSteps;
+                double phi0 = Math.PI * 2.0 * u0;
+                double phi1 = Math.PI * 2.0 * u1;
+
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta0, phi0, (float) u0 * SPHERE_TEXTURE_TILES, (float) v0 * SPHERE_TEXTURE_TILES, alpha);
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta0, phi1, (float) u1 * SPHERE_TEXTURE_TILES, (float) v0 * SPHERE_TEXTURE_TILES, alpha);
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta1, phi1, (float) u1 * SPHERE_TEXTURE_TILES, (float) v1 * SPHERE_TEXTURE_TILES, alpha);
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta1, phi0, (float) u0 * SPHERE_TEXTURE_TILES, (float) v1 * SPHERE_TEXTURE_TILES, alpha);
+            }
+        }
+    }
+
     private static void drawRefractionSphere(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, float strength) {
         if (radius <= 0.35f) return;
 
@@ -379,6 +410,23 @@ public final class BloodSenseClient {
                 .normal(entry, nx, ny, nz);
     }
 
+    private static void addInnerSphereVertex(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, double theta, double phi, float u, float v, int alpha) {
+        float nx = (float)(Math.cos(theta) * Math.cos(phi));
+        float ny = (float)Math.sin(theta);
+        float nz = (float)(Math.cos(theta) * Math.sin(phi));
+
+        float x = (float)(center.x + nx * radius);
+        float y = (float)(center.y + ny * radius);
+        float z = (float)(center.z + nz * radius);
+
+        vertices.vertex(entry, x, y, z)
+                .color(255, 24, 42, alpha)
+                .texture(u, v)
+                .overlay(OverlayTexture.DEFAULT_UV)
+                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
+                .normal(entry, nx, ny, nz);
+    }
+
     private static float contactAmount(BlockView world, float x, float y, float z, float normalY) {
         BlockPos below = BlockPos.ofFloored(x, y - 0.18f, z);
         BlockPos inside = BlockPos.ofFloored(x, y, z);
@@ -410,8 +458,10 @@ public final class BloodSenseClient {
             double y1 = y0 + 2.2 + mass * 5.8;
             double z = trace.pos.getZ() + 0.5;
 
-            double inner = 0.10 + mass * 0.20;
-            double outer = 0.26 + mass * 0.42;
+            double height = y1 - y0;
+            double textureHalf = MathHelper.clamp((float)(height * PILLAR_TEXTURE_ASPECT * 0.5), 0.32f, 1.25f);
+            double inner = textureHalf * (0.34 + mass * 0.12);
+            double outer = textureHalf * (0.78 + mass * 0.18);
 
             drawPillarBillboards(entry, vertices, x, y0, z, outer, y1, r, g, b, alpha / 2);
             drawPillarBillboards(entry, vertices, x, y0 + 0.16, z, inner, y1 + 0.36, 255, 55, 75, Math.clamp(alpha + 30, 120, 255));
