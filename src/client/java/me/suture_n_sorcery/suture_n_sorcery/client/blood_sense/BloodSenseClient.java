@@ -1,26 +1,25 @@
 package me.suture_n_sorcery.suture_n_sorcery.client.blood_sense;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.GpuTextureView;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
-import me.suture_n_sorcery.suture_n_sorcery.mixin.client.DrawContextInvoker;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.HematicBondPayload;
-import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
-import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.render.BufferBuilder;
+import net.minecraft.client.render.BuiltBuffer;
+import net.minecraft.client.render.LightmapTextureManager;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.render.RenderLayer;
+import net.minecraft.client.render.Tessellator;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
@@ -38,7 +37,12 @@ public final class BloodSenseClient {
 
     private static final int DURATION_TICKS = 20 * 6;
     private static final int PULSE_TICKS = 38;
+    private static final int TRACE_LIFETIME_TICKS = 20 * 60 * 12;
+    private static final int TRACE_EXPIRY_FADE_TICKS = 20 * 30;
     private static final float MAX_RADIUS = 16f;
+    private static final float TRACE_EDGE_FADE_BLOCKS = 2.4f;
+    private static final Identifier SPHERE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere.png");
+    private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_trace_pillar.png");
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
 
     private static int remainingTicks = 0;
@@ -55,12 +59,7 @@ public final class BloodSenseClient {
             if (remainingTicks <= 0) visibleTraces.clear();
         });
 
-        WorldRenderEvents.BEFORE_TRANSLUCENT.register(BloodSenseClient::renderWorldSense);
-        HudElementRegistry.attachElementAfter(
-                VanillaHudElements.MISC_OVERLAYS,
-                Identifier.of(Suture_n_sorcery.MOD_ID, "blood_sense_refraction"),
-                (context, tickCounter) -> renderRefraction(context, tickCounter.getTickProgress(false))
-        );
+        WorldRenderEvents.AFTER_ENTITIES.register(BloodSenseClient::renderWorldSense);
 
         ClientPlayNetworking.registerGlobalReceiver(BloodSenseResponsePayload.ID, (payload, context) ->
                 context.client().execute(() -> activate(payload.traces()))
@@ -144,66 +143,82 @@ public final class BloodSenseClient {
         matrices.translate(-camera.x, -camera.y, -camera.z);
 
         MatrixStack.Entry entry = matrices.peek();
-        VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
-        drawPulseSphere(entry, lines, center, radius, strength, age);
-        drawTracePillars(entry, context, client.player, radius, strength);
+        RenderLayer sphereLayer = RenderLayer.getEnergySwirl(SPHERE_TEXTURE, age * 0.012f, age * 0.004f);
+        RenderLayer pillarLayer = RenderLayer.getEnergySwirl(PILLAR_TEXTURE, age * 0.006f, age * 0.018f);
+        drawLayer(sphereLayer, vertices -> drawShaderSphere(entry, vertices, center, radius, strength, age));
+        drawLayer(pillarLayer, vertices -> drawTracePillars(entry, vertices, client.player, radius, strength, age));
 
         matrices.pop();
     }
 
-    private static void drawPulseSphere(MatrixStack.Entry entry, VertexConsumer lines, Vec3d center, float radius, float strength, int age) {
-        if (radius <= 0.25f) return;
-
-        int alpha = Math.clamp((int)(230 * strength), 80, 230);
-        float shimmer = 0.08f + 0.05f * MathHelper.sin(age * 0.45f);
-        float inner = Math.max(0.25f, radius - shimmer);
-        float outer = radius + shimmer;
-
-        drawCircle(entry, lines, center, radius, 0, 230, 24, 38, alpha);
-        drawCircle(entry, lines, center, radius, 1, 230, 24, 38, alpha);
-        drawCircle(entry, lines, center, radius, 2, 230, 24, 38, alpha);
-
-        drawCircle(entry, lines, center, outer, 0, 255, 80, 86, Math.clamp(alpha / 2, 45, 120));
-        drawCircle(entry, lines, center, inner, 0, 110, 20, 32, Math.clamp(alpha / 2, 45, 120));
-        drawCircle(entry, lines, center.add(0.0, radius * 0.34, 0.0), radius * 0.78f, 0, 255, 42, 56, Math.clamp(alpha / 3, 35, 95));
-        drawCircle(entry, lines, center.add(0.0, -radius * 0.34, 0.0), radius * 0.78f, 0, 255, 42, 56, Math.clamp(alpha / 3, 35, 95));
-    }
-
-    private static void drawCircle(MatrixStack.Entry entry, VertexConsumer lines, Vec3d center, float radius, int plane, int r, int g, int b, int a) {
-        int segments = 96;
-        double lastX = 0.0;
-        double lastY = 0.0;
-        double lastZ = 0.0;
-
-        for (int i = 0; i <= segments; i++) {
-            double angle = (Math.PI * 2.0 * i) / segments;
-            double ca = Math.cos(angle) * radius;
-            double sa = Math.sin(angle) * radius;
-
-            double x = center.x + (plane == 0 ? ca : plane == 1 ? ca : 0.0);
-            double y = center.y + (plane == 0 ? 0.0 : plane == 1 ? sa : ca);
-            double z = center.z + (plane == 0 ? sa : plane == 1 ? 0.0 : sa);
-
-            if (i > 0) {
-                addLine(entry, lines, lastX, lastY, lastZ, x, y, z, r, g, b, a);
-            }
-
-            lastX = x;
-            lastY = y;
-            lastZ = z;
+    private static void drawLayer(RenderLayer layer, LayerDraw draw) {
+        BufferBuilder buffer = Tessellator.getInstance().begin(layer.getDrawMode(), layer.getVertexFormat());
+        draw.draw(buffer);
+        BuiltBuffer built = buffer.endNullable();
+        if (built != null) {
+            layer.draw(built);
         }
     }
 
-    private static void drawTracePillars(MatrixStack.Entry entry, WorldRenderContext context, ClientPlayerEntity player, float radius, float strength) {
-        VertexConsumer lines = context.consumers().getBuffer(RenderLayer.getLines());
+    private static void drawShaderSphere(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, float strength, int age) {
+        if (radius <= 0.35f) return;
 
+        int alpha = Math.clamp((int)(92 * strength), 24, 92);
+        int latitudeSteps = 12;
+        int longitudeSteps = 32;
+        float wobble = 1.0f + 0.018f * MathHelper.sin(age * 0.38f);
+
+        for (int lat = 0; lat < latitudeSteps; lat++) {
+            double v0 = lat / (double) latitudeSteps;
+            double v1 = (lat + 1) / (double) latitudeSteps;
+            double theta0 = -Math.PI / 2.0 + Math.PI * v0;
+            double theta1 = -Math.PI / 2.0 + Math.PI * v1;
+
+            for (int lon = 0; lon < longitudeSteps; lon++) {
+                double u0 = lon / (double) longitudeSteps;
+                double u1 = (lon + 1) / (double) longitudeSteps;
+                double phi0 = Math.PI * 2.0 * u0;
+                double phi1 = Math.PI * 2.0 * u1;
+
+                addSphereVertex(entry, vertices, center, radius * wobble, theta0, phi0, (float) u0, (float) v0, alpha, age);
+                addSphereVertex(entry, vertices, center, radius * wobble, theta0, phi1, (float) u1, (float) v0, alpha, age);
+                addSphereVertex(entry, vertices, center, radius * wobble, theta1, phi1, (float) u1, (float) v1, alpha, age);
+                addSphereVertex(entry, vertices, center, radius * wobble, theta1, phi0, (float) u0, (float) v1, alpha, age);
+            }
+        }
+    }
+
+    private static void addSphereVertex(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, double theta, double phi, float u, float v, int alpha, int age) {
+        float nx = (float)(Math.cos(theta) * Math.cos(phi));
+        float ny = (float)Math.sin(theta);
+        float nz = (float)(Math.cos(theta) * Math.sin(phi));
+
+        float waveA = MathHelper.sin((float)(phi * 5.0 + theta * 2.0 + age * 0.22f));
+        float waveB = MathHelper.sin((float)(phi * -3.0 + theta * 7.0 + age * 0.13f));
+        float warpedRadius = radius * (1.0f + waveA * 0.026f + waveB * 0.014f);
+
+        float x = (float)(center.x + nx * warpedRadius);
+        float y = (float)(center.y + ny * warpedRadius);
+        float z = (float)(center.z + nz * warpedRadius);
+
+        vertices.vertex(entry, x, y, z)
+                .color(255, 38, 54, alpha)
+                .texture(u, v)
+                .overlay(OverlayTexture.DEFAULT_UV)
+                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
+                .normal(entry, nx, ny, nz);
+    }
+
+    private static void drawTracePillars(MatrixStack.Entry entry, VertexConsumer vertices, ClientPlayerEntity player, float radius, float strength, int scanAge) {
         for (ClientTrace trace : visibleTraces) {
             double dx = (trace.pos.getX() + 0.5) - player.getX();
             double dz = (trace.pos.getZ() + 0.5) - player.getZ();
-            if ((dx * dx) + (dz * dz) > radius * radius) continue;
+            float distance = MathHelper.sqrt((float)(dx * dx + dz * dz));
+            updateTraceVisibility(trace, distance, radius, scanAge);
+            if (trace.visibility <= 0.01f) continue;
 
             float mass = traceVisualMass(trace.strength);
-            float traceStrength = MathHelper.clamp((0.28f + mass * 0.72f) * strength, 0f, 1.6f);
+            float traceStrength = MathHelper.clamp((0.28f + mass * 0.72f) * strength * trace.visibility, 0f, 1.6f);
 
             int alpha = Math.clamp((int)(85 + 145 * traceStrength), 70, 240);
             int r = trace.type == 1 ? 255 : 220;
@@ -218,86 +233,10 @@ public final class BloodSenseClient {
             double inner = 0.10 + mass * 0.20;
             double outer = 0.26 + mass * 0.42;
 
-            drawPillarLines(entry, lines, x, y0, z, outer, y1, r, g, b, alpha / 2);
-            drawPillarLines(entry, lines, x, y0 + 0.18, z, inner, y1 + 0.28, 255, 55, 75, Math.clamp(alpha + 30, 120, 255));
-
-            drawSquareRing(entry, lines, x, y0 + 0.08, z, outer * 1.25, r, g, b, alpha / 2);
-            drawSquareRing(entry, lines, x, y1, z, outer * 0.95, 255, 65, 88, Math.clamp(alpha + 15, 100, 255));
-            drawSquareRing(entry, lines, x, y1 + 0.38, z, inner * 0.8, 255, 115, 128, Math.clamp(alpha, 90, 220));
-
-            drawPillarSpiral(entry, lines, x, y0, z, outer * 0.92, y1, trace.strength, 255, 48, 72, Math.clamp(alpha + 20, 110, 255));
-            drawPillarSpiral(entry, lines, x, y0 + 0.15, z, outer * 0.72, y1 + 0.2, trace.strength + 9, r, g, b, alpha / 2);
-
-            addLine(entry, lines, x, y0 - 0.2, z, x, y1 + 0.85, z, 255, 70, 82, Math.clamp(alpha + 45, 130, 255));
+            drawPillarBillboards(entry, vertices, x, y0, z, outer, y1, r, g, b, alpha / 2);
+            drawPillarBillboards(entry, vertices, x, y0 + 0.16, z, inner, y1 + 0.36, 255, 55, 75, Math.clamp(alpha + 30, 120, 255));
+            drawPillarCap(entry, vertices, x, y1 + 0.18, z, outer * 0.9, 255, 75, 92, Math.clamp(alpha + 15, 100, 255));
         }
-    }
-
-    private static void drawPillarLines(MatrixStack.Entry entry, VertexConsumer lines, double x, double y0, double z, double half, double y1, int r, int g, int b, int a) {
-        addLine(entry, lines, x - half, y0, z - half, x - half, y1, z - half, r, g, b, a);
-        addLine(entry, lines, x + half, y0, z - half, x + half, y1, z - half, r, g, b, a);
-        addLine(entry, lines, x - half, y0, z + half, x - half, y1, z + half, r, g, b, a);
-        addLine(entry, lines, x + half, y0, z + half, x + half, y1, z + half, r, g, b, a);
-        addLine(entry, lines, x - half, y1, z - half, x + half, y1, z - half, r, g, b, a);
-        addLine(entry, lines, x + half, y1, z - half, x + half, y1, z + half, r, g, b, a);
-        addLine(entry, lines, x + half, y1, z + half, x - half, y1, z + half, r, g, b, a);
-        addLine(entry, lines, x - half, y1, z + half, x - half, y1, z - half, r, g, b, a);
-    }
-
-    private static void addLine(MatrixStack.Entry entry, VertexConsumer lines, double x1, double y1, double z1, double x2, double y2, double z2, int r, int g, int b, int a) {
-        float nx = (float)(x2 - x1);
-        float ny = (float)(y2 - y1);
-        float nz = (float)(z2 - z1);
-        float len = MathHelper.sqrt(nx * nx + ny * ny + nz * nz);
-        if (len <= 0.0001f) return;
-
-        nx /= len;
-        ny /= len;
-        nz /= len;
-
-        lines.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a).normal(entry, nx, ny, nz);
-        lines.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).normal(entry, nx, ny, nz);
-    }
-
-    private static void renderRefraction(DrawContext context, float tickDelta) {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (remainingTicks <= 0 || client.world == null || client.player == null) return;
-        if (client.currentScreen != null) return;
-
-        GpuTextureView srcView = outputView(client);
-        if (srcView == null) return;
-
-        int width = client.getWindow().getScaledWidth();
-        int height = client.getWindow().getScaledHeight();
-        if (width <= 0 || height <= 0) return;
-
-        int packed = getPacked(tickDelta);
-
-        ((DrawContextInvoker) context).sns$drawTexturedQuad(
-                ModShader.BLOOD_SENSE_REFRACTION,
-                srcView,
-                0, 0, width, height,
-                0f, 1f, 1f, 0f,
-                packed
-        );
-    }
-
-    private static int getPacked(float tickDelta) {
-        int age = DURATION_TICKS - remainingTicks;
-        float pulse01 = Math.min(1f, (age + tickDelta) / (float)PULSE_TICKS);
-        float radius = Math.min(1f, 0.64f * smooth(pulse01));
-        float strength = Math.min(1f, (remainingTicks + tickDelta) / (float)DURATION_TICKS);
-
-        int pr = 128;
-        int pg = 128;
-        int pb = Math.clamp((int)(radius * 255f), 0, 255);
-        int pa = Math.clamp((int)(strength * 235f), 0, 235);
-        int packed = (pa << 24) | (pr << 16) | (pg << 8) | pb;
-        return packed;
-    }
-
-    private static GpuTextureView outputView(MinecraftClient client) {
-        var override = RenderSystem.outputColorTextureOverride;
-        return override != null ? override : client.getFramebuffer().getColorAttachmentView();
     }
 
     private static float smooth(float value) {
@@ -311,37 +250,58 @@ public final class BloodSenseClient {
         return MathHelper.clamp((float)(Math.log1p(value) / Math.log1p(max)), 0.18f, 1.0f);
     }
 
-    private static void drawSquareRing(MatrixStack.Entry entry, VertexConsumer lines, double x, double y, double z, double half, int r, int g, int b, int a) {
-        addLine(entry, lines, x - half, y, z - half, x + half, y, z - half, r, g, b, a);
-        addLine(entry, lines, x + half, y, z - half, x + half, y, z + half, r, g, b, a);
-        addLine(entry, lines, x + half, y, z + half, x - half, y, z + half, r, g, b, a);
-        addLine(entry, lines, x - half, y, z + half, x - half, y, z - half, r, g, b, a);
+    private static void updateTraceVisibility(ClientTrace trace, float distance, float radius, int scanAge) {
+        float edge = MathHelper.clamp((radius - distance + TRACE_EDGE_FADE_BLOCKS) / TRACE_EDGE_FADE_BLOCKS, 0f, 1f);
+        float entryFade = smooth(edge);
+        float durationFade = smooth(MathHelper.clamp(remainingTicks / 20f, 0f, 1f));
+
+        int clientAge = trace.ageTicks + scanAge;
+        float expiryFade = 1f;
+        int expiryStart = TRACE_LIFETIME_TICKS - TRACE_EXPIRY_FADE_TICKS;
+        if (clientAge > expiryStart) {
+            expiryFade = 1f - smooth(MathHelper.clamp((clientAge - expiryStart) / (float)TRACE_EXPIRY_FADE_TICKS, 0f, 1f));
+        }
+
+        float target = entryFade * durationFade * expiryFade;
+        float speed = target > trace.visibility ? 0.22f : 0.14f;
+        trace.visibility += (target - trace.visibility) * speed;
+        if (trace.visibility < 0.004f) trace.visibility = 0f;
     }
 
-    private static void drawPillarSpiral(MatrixStack.Entry entry, VertexConsumer lines, double x, double y0, double z, double radius, double y1, int seed, int r, int g, int b, int a) {
-        int steps = 18;
-        double height = y1 - y0;
-        double phase = seed * 0.17;
+    private static void drawPillarBillboards(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y0, double z, double half, double y1, int r, int g, int b, int a) {
+        addTexturedQuad(entry, vertices, x - half, y0, z, x + half, y0, z, x + half, y1, z, x - half, y1, z, r, g, b, a, 0f);
+        addTexturedQuad(entry, vertices, x, y0, z - half, x, y0, z + half, x, y1, z + half, x, y1, z - half, r, g, b, a, 1f);
+    }
 
-        double lastX = x + Math.cos(phase) * radius;
-        double lastY = y0;
-        double lastZ = z + Math.sin(phase) * radius;
+    private static void drawPillarCap(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y, double z, double half, int r, int g, int b, int a) {
+        addTexturedQuad(entry, vertices, x - half, y, z - half, x + half, y, z - half, x + half, y, z + half, x - half, y, z + half, r, g, b, a, 2f);
+    }
 
-        for (int i = 1; i <= steps; i++) {
-            double t = i / (double) steps;
-            double angle = phase + t * Math.PI * 2.4;
-            double px = x + Math.cos(angle) * radius;
-            double py = y0 + height * t;
-            double pz = z + Math.sin(angle) * radius;
+    private static void addTexturedQuad(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, int r, int g, int b, int a, float uOffset) {
+        vertices.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a).texture(uOffset, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).texture(uOffset + 1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x3, (float)y3, (float)z3).color(r, g, b, a).texture(uOffset + 1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x4, (float)y4, (float)z4).color(r, g, b, a).texture(uOffset, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+    }
 
-            addLine(entry, lines, lastX, lastY, lastZ, px, py, pz, r, g, b, a);
+    private static final class ClientTrace {
+        private final int type;
+        private final BlockPos pos;
+        private final int strength;
+        private final int ageTicks;
+        private float visibility;
 
-            lastX = px;
-            lastY = py;
-            lastZ = pz;
+        private ClientTrace(int type, BlockPos pos, int strength, int ageTicks) {
+            this.type = type;
+            this.pos = pos;
+            this.strength = strength;
+            this.ageTicks = ageTicks;
+            this.visibility = 0f;
         }
     }
 
-    private record ClientTrace(int type, BlockPos pos, int strength, int ageTicks) {
+    @FunctionalInterface
+    private interface LayerDraw {
+        void draw(VertexConsumer vertices);
     }
 }
