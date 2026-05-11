@@ -7,6 +7,7 @@ import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.HematicBondPayload;
+import me.suture_n_sorcery.suture_n_sorcery.registries.ModParticles;
 import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -50,7 +51,7 @@ public final class BloodSenseClient {
     private static final float MAX_RADIUS = 16f;
     private static final float TRACE_EDGE_FADE_BLOCKS = 2.4f;
     private static final float SPHERE_TEXTURE_TILES = 6f;
-    private static final float INNER_SPHERE_SCALE = 0.62f;
+    private static final float INNER_SPHERE_SCALE = 0.36f;
     private static final float PILLAR_TEXTURE_ASPECT = 26f / 64f;
     private static final Identifier SPHERE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere.png");
     private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar.png");
@@ -79,6 +80,9 @@ public final class BloodSenseClient {
                 }
             } else if (fadeOutTicks > 0 && !client.isPaused()) {
                 fadeOutTicks--;
+            }
+            if (!client.isPaused()) {
+                spawnPillarParticles(client);
             }
             if (remainingTicks <= 0 && fadeOutTicks <= 0) visibleTraces.clear();
         });
@@ -172,10 +176,11 @@ public final class BloodSenseClient {
 
         MatrixStack.Entry entry = matrices.peek();
         RenderLayer sphereLayer = RenderLayer.getEnergySwirl(SPHERE_TEXTURE, age * 0.012f, age * 0.004f);
-        RenderLayer pillarLayer = RenderLayer.getEnergySwirl(PILLAR_TEXTURE, age * 0.006f, age * 0.018f);
+        RenderLayer innerSphereLayer = RenderLayer.getDebugQuads();
+        RenderLayer pillarLayer = RenderLayer.getEntityTranslucent(PILLAR_TEXTURE);
         RenderLayer sphereRefractionLayer = bloodSenseSphereRefractionLayer();
         drawLayer(sphereRefractionLayer, vertices -> drawRefractionSphere(entry, vertices, center, radius, strength));
-        drawLayer(sphereLayer, vertices -> drawInnerSphere(entry, vertices, center, radius, strength));
+        drawLayer(innerSphereLayer, vertices -> drawInnerSphere(entry, vertices, center, radius, strength));
         drawLayer(sphereLayer, vertices -> drawShaderSphere(entry, vertices, client.world, center, radius, strength));
         drawLayer(pillarLayer, vertices -> drawTracePillars(entry, vertices, client.player, radius, strength, (int)age));
 
@@ -320,7 +325,7 @@ public final class BloodSenseClient {
         float innerRadius = radius * INNER_SPHERE_SCALE;
         if (innerRadius <= 0.35f) return;
 
-        int alpha = Math.clamp((int)(58 * strength), 0, 78);
+        int alpha = Math.clamp((int)(18 * strength), 0, 28);
         int latitudeSteps = 10;
         int longitudeSteps = 28;
 
@@ -420,11 +425,7 @@ public final class BloodSenseClient {
         float z = (float)(center.z + nz * radius);
 
         vertices.vertex(entry, x, y, z)
-                .color(255, 24, 42, alpha)
-                .texture(u, v)
-                .overlay(OverlayTexture.DEFAULT_UV)
-                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
-                .normal(entry, nx, ny, nz);
+                .color(255, 18, 34, alpha);
     }
 
     private static float contactAmount(BlockView world, float x, float y, float z, float normalY) {
@@ -465,7 +466,6 @@ public final class BloodSenseClient {
 
             drawPillarBillboards(entry, vertices, x, y0, z, outer, y1, r, g, b, alpha / 2);
             drawPillarBillboards(entry, vertices, x, y0 + 0.16, z, inner, y1 + 0.36, 255, 55, 75, Math.clamp(alpha + 30, 120, 255));
-            drawPillarCap(entry, vertices, x, y1 + 0.18, z, outer * 0.9, 255, 75, 92, Math.clamp(alpha + 15, 100, 255));
         }
     }
 
@@ -503,20 +503,42 @@ public final class BloodSenseClient {
         if (trace.visibility < 0.004f) trace.visibility = 0f;
     }
 
+    private static void spawnPillarParticles(MinecraftClient client) {
+        if (client.world == null || client.player == null || visibleTraces.isEmpty()) return;
+
+        for (ClientTrace trace : visibleTraces) {
+            if (trace.visibility <= 0.12f || client.world.random.nextFloat() > trace.visibility * 0.35f) continue;
+
+            float mass = traceVisualMass(trace.strength);
+            double height = 2.2 + mass * 5.8;
+            double radius = 0.18 + mass * 0.42;
+            double angle = client.world.random.nextDouble() * Math.PI * 2.0;
+            double ring = radius * (0.45 + client.world.random.nextDouble() * 0.55);
+            double x = trace.pos.getX() + 0.5 + Math.cos(angle) * ring;
+            double y = trace.pos.getY() + 0.16 + client.world.random.nextDouble() * height;
+            double z = trace.pos.getZ() + 0.5 + Math.sin(angle) * ring;
+            double swirl = 0.012 + mass * 0.018;
+
+            client.world.addParticleClient(
+                    ModParticles.BLOOD_PARTICLE,
+                    x, y, z,
+                    -Math.sin(angle) * swirl,
+                    0.012 + client.world.random.nextDouble() * 0.018,
+                    Math.cos(angle) * swirl
+            );
+        }
+    }
+
     private static void drawPillarBillboards(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y0, double z, double half, double y1, int r, int g, int b, int a) {
-        addTexturedQuad(entry, vertices, x - half, y0, z, x + half, y0, z, x + half, y1, z, x - half, y1, z, r, g, b, a, 0f);
-        addTexturedQuad(entry, vertices, x, y0, z - half, x, y0, z + half, x, y1, z + half, x, y1, z - half, r, g, b, a, 1f);
+        addTexturedQuad(entry, vertices, x - half, y0, z, x + half, y0, z, x + half, y1, z, x - half, y1, z, r, g, b, a);
+        addTexturedQuad(entry, vertices, x, y0, z - half, x, y0, z + half, x, y1, z + half, x, y1, z - half, r, g, b, a);
     }
 
-    private static void drawPillarCap(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y, double z, double half, int r, int g, int b, int a) {
-        addTexturedQuad(entry, vertices, x - half, y, z - half, x + half, y, z - half, x + half, y, z + half, x - half, y, z + half, r, g, b, a, 2f);
-    }
-
-    private static void addTexturedQuad(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, int r, int g, int b, int a, float uOffset) {
-        vertices.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a).texture(uOffset, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
-        vertices.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).texture(uOffset + 1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
-        vertices.vertex(entry, (float)x3, (float)y3, (float)z3).color(r, g, b, a).texture(uOffset + 1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
-        vertices.vertex(entry, (float)x4, (float)y4, (float)z4).color(r, g, b, a).texture(uOffset, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+    private static void addTexturedQuad(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, int r, int g, int b, int a) {
+        vertices.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a).texture(0f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).texture(1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x3, (float)y3, (float)z3).color(r, g, b, a).texture(1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x4, (float)y4, (float)z4).color(r, g, b, a).texture(0f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
     }
 
     private static final class ClientTrace {
