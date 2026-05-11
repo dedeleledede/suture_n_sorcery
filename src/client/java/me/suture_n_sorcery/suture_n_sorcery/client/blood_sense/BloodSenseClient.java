@@ -7,7 +7,9 @@ import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.mixin.client.DrawContextInvoker;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
+import me.suture_n_sorcery.suture_n_sorcery.network.HematicBondPayload;
 import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
+import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -63,6 +65,9 @@ public final class BloodSenseClient {
         ClientPlayNetworking.registerGlobalReceiver(BloodSenseResponsePayload.ID, (payload, context) ->
                 context.client().execute(() -> activate(payload.traces()))
         );
+        ClientPlayNetworking.registerGlobalReceiver(HematicBondPayload.ID, (payload, context) ->
+                context.client().execute(() -> syncHematicBond(context.client(), payload.absorbed()))
+        );
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (screen instanceof InventoryScreen) {
@@ -87,7 +92,7 @@ public final class BloodSenseClient {
 
     private static void renderInventoryMarker(Screen screen, DrawContext context, int mouseX, int mouseY, float tickDelta) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (!HematicCatalyst.hasAbsorbedCatalyst(client.player)) return;
+        if (client.player == null || !HematicCatalyst.hasAbsorbedCatalyst(client.player)) return;
 
         int left = (screen.width - 176) / 2;
         int top = (screen.height - 166) / 2;
@@ -113,6 +118,12 @@ public final class BloodSenseClient {
             ));
         }
         remainingTicks = DURATION_TICKS;
+    }
+
+    private static void syncHematicBond(MinecraftClient client, boolean absorbed) {
+        if (client.player instanceof HematicBondHolder holder) {
+            holder.suture_n_sorcery$setAbsorbedHematicCatalyst(absorbed);
+        }
     }
 
     private static void renderWorldSense(WorldRenderContext context) {

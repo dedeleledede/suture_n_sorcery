@@ -7,6 +7,7 @@ import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomBlockEnt
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomScreenHandler;
 import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -30,8 +31,10 @@ public final class ModNetworking {
 
         registerPressurizePayload();
         registerBloodSensePayloads();
+        registerHematicBondPayload();
         registerPressurizeReceiver();
         registerBloodSenseReceiver();
+        registerHematicBondSync();
     }
 
     private static void registerPressurizePayload() {
@@ -43,6 +46,10 @@ public final class ModNetworking {
         PayloadTypeRegistry.playS2C().register(BloodSenseResponsePayload.ID, BloodSenseResponsePayload.CODEC);
     }
 
+    private static void registerHematicBondPayload() {
+        PayloadTypeRegistry.playS2C().register(HematicBondPayload.ID, HematicBondPayload.CODEC);
+    }
+
     private static void registerPressurizeReceiver() {
         ServerPlayNetworking.registerGlobalReceiver(PressurizePayload.ID, (payload, context) ->
                 context.server().execute(() -> handlePressurize(payload, context))
@@ -52,6 +59,12 @@ public final class ModNetworking {
     private static void registerBloodSenseReceiver() {
         ServerPlayNetworking.registerGlobalReceiver(BloodSenseRequestPayload.ID, (payload, context) ->
                 context.server().execute(() -> handleBloodSense(context.player()))
+        );
+    }
+
+    private static void registerHematicBondSync() {
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+                syncHematicBond(handler.player)
         );
     }
 
@@ -105,5 +118,9 @@ public final class ModNetworking {
                 trace.strength(),
                 trace.age(now)
         );
+    }
+
+    public static void syncHematicBond(ServerPlayerEntity player) {
+        ServerPlayNetworking.send(player, new HematicBondPayload(HematicCatalyst.hasAbsorbedCatalyst(player)));
     }
 }

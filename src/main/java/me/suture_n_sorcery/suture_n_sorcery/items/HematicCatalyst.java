@@ -5,6 +5,7 @@ import me.suture_n_sorcery.suture_n_sorcery.items.needle.Needle;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.NeedleStacks;
 import me.suture_n_sorcery.suture_n_sorcery.items.needle.SutureNeedle;
 import me.suture_n_sorcery.suture_n_sorcery.network.HematicFeedPayload;
+import me.suture_n_sorcery.suture_n_sorcery.network.ModNetworking;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModDamageTypes;
 import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
 
@@ -291,6 +292,9 @@ public final class HematicCatalyst extends Item {
         if (player instanceof HematicBondHolder holder) {
             holder.suture_n_sorcery$setAbsorbedHematicCatalyst(absorbed);
         }
+        if (player instanceof ServerPlayerEntity serverPlayer) {
+            ModNetworking.syncHematicBond(serverPlayer);
+        }
     }
 
     public static boolean isReady(ItemStack stack) {
@@ -324,9 +328,7 @@ public final class HematicCatalyst extends Item {
 
     public static boolean absorbCatalyst(PlayerEntity player, ItemStack stack) {
         if (!canAbsorbCatalyst(player, stack)) return false;
-        if (player instanceof HematicBondHolder holder) {
-            holder.suture_n_sorcery$setAbsorbedHematicCatalyst(true);
-        }
+        setAbsorbedCatalyst(player, true);
         stack.decrement(1);
         return true;
     }
