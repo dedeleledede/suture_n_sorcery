@@ -31,7 +31,7 @@ public final class BloodSenseTools {
             .maxCount(64)
     );
 
-    public static final Identifier VIAL_ID = Identifier.of(Suture_n_sorcery.MOD_ID, "vial");
+    public static final Identifier VIAL_ID = Identifier.of(Suture_n_sorcery.MOD_ID, "empty_vial");
     public static final RegistryKey<Item> VIAL_KEY = RegistryKey.of(RegistryKeys.ITEM, VIAL_ID);
     public static final Item VIAL = new Item(new Item.Settings()
             .registryKey(VIAL_KEY)

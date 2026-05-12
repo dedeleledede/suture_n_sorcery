@@ -1,6 +1,6 @@
 {
   "model": {
     "type": "minecraft:model",
-    "model": "suture_n_sorcery:item/vial"
+    "model": "suture_n_sorcery:item/empty_vial"
   }
 }
