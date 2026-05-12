@@ -54,6 +54,7 @@ public final class BloodSenseClient {
     private static final float INNER_SPHERE_SCALE = 0.36f;
     private static final float PILLAR_TEXTURE_ASPECT = 26f / 64f;
     private static final Identifier SPHERE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere.png");
+    private static final Identifier SPHERE_TEXTURE_INNER = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere_inner.png");
     private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar.png");
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
     private static final RenderPhase.TextureBase FRAMEBUFFER_TEXTURE = new RenderPhase.TextureBase(
@@ -87,7 +88,7 @@ public final class BloodSenseClient {
             if (remainingTicks <= 0 && fadeOutTicks <= 0) visibleTraces.clear();
         });
 
-        WorldRenderEvents.AFTER_ENTITIES.register(BloodSenseClient::renderWorldSense);
+        WorldRenderEvents.END_MAIN.register(BloodSenseClient::renderWorldSense);
 
         ClientPlayNetworking.registerGlobalReceiver(BloodSenseResponsePayload.ID, (payload, context) ->
                 context.client().execute(() -> activate(payload.traces()))
@@ -119,7 +120,7 @@ public final class BloodSenseClient {
 
     private static void renderInventoryMarker(Screen screen, DrawContext context, int mouseX, int mouseY, float tickDelta) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (client.player == null || !HematicCatalyst.hasAbsorbedCatalyst(client.player)) return;
+        if (!HematicCatalyst.hasAbsorbedCatalyst(client.player)) return;
 
         int left = (screen.width - 176) / 2;
         int top = (screen.height - 166) / 2;
@@ -175,14 +176,32 @@ public final class BloodSenseClient {
         matrices.translate(-camera.x, -camera.y, -camera.z);
 
         MatrixStack.Entry entry = matrices.peek();
-        RenderLayer sphereLayer = RenderLayer.getEnergySwirl(SPHERE_TEXTURE, age * 0.012f, age * 0.004f);
-        RenderLayer innerSphereLayer = RenderLayer.getDebugQuads();
+
+        RenderLayer outerSphereLayer = RenderLayer.getEnergySwirl(
+                SPHERE_TEXTURE,
+                age * 0.012f,
+                age * 0.004f
+        );
+
+        RenderLayer innerSphereLayer = RenderLayer.getEntityTranslucent(SPHERE_TEXTURE_INNER);
         RenderLayer pillarLayer = RenderLayer.getEntityTranslucent(PILLAR_TEXTURE);
         RenderLayer sphereRefractionLayer = bloodSenseSphereRefractionLayer();
-        drawLayer(sphereRefractionLayer, vertices -> drawRefractionSphere(entry, vertices, center, radius, strength));
-        drawLayer(innerSphereLayer, vertices -> drawInnerSphere(entry, vertices, center, radius, strength));
-        drawLayer(sphereLayer, vertices -> drawShaderSphere(entry, vertices, client.world, center, radius, strength));
-        drawLayer(pillarLayer, vertices -> drawTracePillars(entry, vertices, client.player, radius, strength, (int)age));
+
+        drawLayer(sphereRefractionLayer, vertices ->
+                drawRefractionSphere(entry, vertices, center, radius, strength)
+        );
+
+        drawLayer(innerSphereLayer, vertices ->
+                drawInnerSphere(entry, vertices, center, radius, strength, age)
+        );
+
+        drawLayer(outerSphereLayer, vertices ->
+                drawShaderSphere(entry, vertices, client.world, center, radius, strength)
+        );
+
+        drawLayer(pillarLayer, vertices ->
+                drawTracePillars(entry, vertices, client.player, radius, strength, (int)age)
+        );
 
         matrices.pop();
     }
@@ -321,13 +340,16 @@ public final class BloodSenseClient {
         }
     }
 
-    private static void drawInnerSphere(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, float strength) {
+    private static void drawInnerSphere(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d center, float radius, float strength, float age) {
         float innerRadius = radius * INNER_SPHERE_SCALE;
         if (innerRadius <= 0.35f) return;
 
-        int alpha = Math.clamp((int)(18 * strength), 0, 28);
+        int alpha = Math.clamp((int)(42 * strength), 0, 58);
         int latitudeSteps = 10;
         int longitudeSteps = 28;
+
+        float uShift = age * 0.018f;
+        float vShift = age * -0.007f;
 
         for (int lat = 0; lat < latitudeSteps; lat++) {
             double v0 = lat / (double) latitudeSteps;
@@ -341,10 +363,10 @@ public final class BloodSenseClient {
                 double phi0 = Math.PI * 2.0 * u0;
                 double phi1 = Math.PI * 2.0 * u1;
 
-                addInnerSphereVertex(entry, vertices, center, innerRadius, theta0, phi0, (float) u0 * SPHERE_TEXTURE_TILES, (float) v0 * SPHERE_TEXTURE_TILES, alpha);
-                addInnerSphereVertex(entry, vertices, center, innerRadius, theta0, phi1, (float) u1 * SPHERE_TEXTURE_TILES, (float) v0 * SPHERE_TEXTURE_TILES, alpha);
-                addInnerSphereVertex(entry, vertices, center, innerRadius, theta1, phi1, (float) u1 * SPHERE_TEXTURE_TILES, (float) v1 * SPHERE_TEXTURE_TILES, alpha);
-                addInnerSphereVertex(entry, vertices, center, innerRadius, theta1, phi0, (float) u0 * SPHERE_TEXTURE_TILES, (float) v1 * SPHERE_TEXTURE_TILES, alpha);
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta0, phi0, (float)u0 * SPHERE_TEXTURE_TILES + uShift, (float)v0 * SPHERE_TEXTURE_TILES + vShift, alpha);
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta0, phi1, (float)u1 * SPHERE_TEXTURE_TILES + uShift, (float)v0 * SPHERE_TEXTURE_TILES + vShift, alpha);
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta1, phi1, (float)u1 * SPHERE_TEXTURE_TILES + uShift, (float)v1 * SPHERE_TEXTURE_TILES + vShift, alpha);
+                addInnerSphereVertex(entry, vertices, center, innerRadius, theta1, phi0, (float)u0 * SPHERE_TEXTURE_TILES + uShift, (float)v1 * SPHERE_TEXTURE_TILES + vShift, alpha);
             }
         }
     }
@@ -425,7 +447,11 @@ public final class BloodSenseClient {
         float z = (float)(center.z + nz * radius);
 
         vertices.vertex(entry, x, y, z)
-                .color(255, 18, 34, alpha);
+                .color(255, 34, 54, alpha)
+                .texture(u, v)
+                .overlay(OverlayTexture.DEFAULT_UV)
+                .light(LightmapTextureManager.MAX_LIGHT_COORDINATE)
+                .normal(entry, nx, ny, nz);
     }
 
     private static float contactAmount(BlockView world, float x, float y, float z, float normalY) {
