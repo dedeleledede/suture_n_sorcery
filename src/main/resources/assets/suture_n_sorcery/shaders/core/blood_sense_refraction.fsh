@@ -31,7 +31,7 @@ void main() {
 
     float luminance = dot(scene.rgb, vec3(0.299, 0.587, 0.114));
     float redMemory = smoothstep(0.02, 0.35, scene.r - max(scene.g, scene.b));
-    float desaturation = (1.0 - redMemory) * mood * 0.90;
+    float desaturation = (1.0 - redMemory) * mood * 0.97;
     vec3 desaturated = mix(scene.rgb, vec3(luminance), desaturation);
     vec3 darkened = desaturated * (1.0 - mood * 0.16);
     vec3 tint = vec3(0.24, 0.015, 0.035) * field * strength;

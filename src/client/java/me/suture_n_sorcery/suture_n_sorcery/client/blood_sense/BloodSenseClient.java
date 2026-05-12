@@ -333,7 +333,7 @@ public final class BloodSenseClient {
     private static void drawShaderSphere(MatrixStack.Entry entry, VertexConsumer vertices, BlockView world, Vec3d center, float radius, float strength) {
         if (radius <= 0.35f) return;
 
-        int alpha = Math.clamp((int)(92 * strength), 0, 112);
+        int alpha = Math.clamp((int)(62 * strength), 0, 82);
         int latitudeSteps = 12;
         int longitudeSteps = 32;
 
@@ -361,7 +361,7 @@ public final class BloodSenseClient {
         float innerRadius = radius * INNER_SPHERE_SCALE;
         if (innerRadius <= 0.35f) return;
 
-        int alpha = Math.clamp((int)(42 * strength), 0, 58);
+        int alpha = Math.clamp((int)(26 * strength), 0, 38);
         int latitudeSteps = 10;
         int longitudeSteps = 28;
 
@@ -582,8 +582,8 @@ public final class BloodSenseClient {
         double bodyHalf = MathHelper.clamp((float)(height * PILLAR_BODY_TEXTURE_ASPECT * 0.26), distant ? 0.055f : 0.12f, distant ? 0.18f : 0.78f);
         double coreHalf = MathHelper.clamp((float)(height * PILLAR_CORE_TEXTURE_ASPECT * 0.16), distant ? 0.035f : 0.055f, distant ? 0.10f : 0.36f);
 
-        int baseAlpha = Math.clamp((int)((ritual ? 125 : 105) * traceStrength * MathHelper.lerp(age, 1f, 0.58f)), 18, distant ? 105 : 210);
-        int coreAlpha = Math.clamp((int)((ritual ? 190 : 155) * traceStrength * freshness), distant ? 18 : 35, distant ? 115 : 235);
+        int baseAlpha = Math.clamp((int)((ritual ? 150 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f)), 34, distant ? 130 : 235);
+        int coreAlpha = Math.clamp((int)((ritual ? 215 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f)), distant ? 30 : 58, distant ? 145 : 250);
         float pulseSpeed = ritual ? 0.19f : MathHelper.lerp(freshness, 0.045f, 0.135f);
 
         return new MarkerStyle(

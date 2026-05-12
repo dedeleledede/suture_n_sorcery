@@ -1,13 +1,20 @@
 package me.suture_n_sorcery.suture_n_sorcery.blood_sense;
 
+import me.suture_n_sorcery.suture_n_sorcery.items.BloodSenseTools;
+import net.minecraft.entity.ItemEntity;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.HashMap;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public final class BloodSenseTracker {
 
@@ -17,6 +24,10 @@ public final class BloodSenseTracker {
 
     private static final int TRACE_MERGE_RADIUS = 4;
     private static final int MAX_TRACE_STRENGTH = 1800;
+    private static final int ACTIVE_SENSE_GRACE_TICKS = 20 * 8;
+    private static final int ECHO_ASH_RADIUS = 16;
+    private static final float ECHO_ASH_DROP_CHANCE = 0.45f;
+    private static final Map<UUID, Long> ACTIVE_BLOOD_SENSE = new HashMap<>();
 
     private BloodSenseTracker() {
     }
@@ -25,6 +36,7 @@ public final class BloodSenseTracker {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity.getEntityWorld() instanceof ServerWorld world) {
                 recordDeath(world, entity);
+                tryDropEchoAsh(world, entity);
             }
         });
 
@@ -60,6 +72,10 @@ public final class BloodSenseTracker {
         }
 
         state.markDirty();
+    }
+
+    public static void markBloodSenseActive(ServerWorld world, UUID playerUuid) {
+        ACTIVE_BLOOD_SENSE.put(playerUuid, world.getTime() + ACTIVE_SENSE_GRACE_TICKS);
     }
 
     public static List<BloodSenseTrace> recentTraces(ServerWorld world, BlockPos center, int radius) {
@@ -157,10 +173,33 @@ public final class BloodSenseTracker {
         List<BloodSenseWorldState.StoredTrace> traces = state.traces();
 
         long now = world.getTime();
-        boolean removed = traces.removeIf(trace -> now - trace.createdTime() > TRACE_LIFETIME_TICKS);
+        boolean removed = traces.removeIf(trace -> now - trace.createdTime() >= TRACE_LIFETIME_TICKS);
+        ACTIVE_BLOOD_SENSE.entrySet().removeIf(entry -> entry.getValue() < now);
         if (removed) {
             state.markDirty();
         }
+    }
+
+    private static void tryDropEchoAsh(ServerWorld world, LivingEntity entity) {
+        if (entity instanceof PlayerEntity || !entity.isOnFire() || world.random.nextFloat() > ECHO_ASH_DROP_CHANCE) return;
+
+        long now = world.getTime();
+        long radiusSquared = (long)ECHO_ASH_RADIUS * ECHO_ASH_RADIUS;
+        boolean witnessed = world.getPlayers(player ->
+                player.squaredDistanceTo(entity) <= radiusSquared
+                        && ACTIVE_BLOOD_SENSE.getOrDefault(player.getUuid(), 0L) >= now
+        ).size() > 0;
+
+        if (!witnessed) return;
+
+        ItemEntity drop = new ItemEntity(
+                world,
+                entity.getX(),
+                entity.getY() + 0.35,
+                entity.getZ(),
+                new ItemStack(BloodSenseTools.ECHO_ASH)
+        );
+        world.spawnEntity(drop);
     }
 
     private static BloodSenseWorldState state(ServerWorld world) {

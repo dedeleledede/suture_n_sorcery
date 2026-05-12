@@ -97,6 +97,7 @@ public final class ModNetworking {
         if (!HematicCatalyst.hasAbsorbedCatalyst(player)) return;
 
         ServerWorld world = player.getEntityWorld();
+        BloodSenseTracker.markBloodSenseActive(world, player.getUuid());
         List<BloodSenseResponsePayload.Trace> traces = BloodSenseTracker
                 .recentTraces(world, player.getBlockPos(), BLOOD_SENSE_RADIUS)
                 .stream()

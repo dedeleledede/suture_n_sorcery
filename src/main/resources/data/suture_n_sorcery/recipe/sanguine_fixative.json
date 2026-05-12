@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    "suture_n_sorcery:bottled_blood",
+    "suture_n_sorcery:echo_ash",
+    "minecraft:clay_ball"
+  ],
+  "result": {
+    "id": "suture_n_sorcery:sanguine_fixative",
+    "count": 2
+  }
+}

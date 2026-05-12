@@ -3,6 +3,7 @@ package me.suture_n_sorcery.suture_n_sorcery.registries;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserItem;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomItem;
 import me.suture_n_sorcery.suture_n_sorcery.items.BoneMarrow;
+import me.suture_n_sorcery.suture_n_sorcery.items.BloodSenseTools;
 import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
 import me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze;
 import me.suture_n_sorcery.suture_n_sorcery.items.Gauze;
@@ -29,6 +30,10 @@ public final class ModItems {
         register(ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET_KEY, ConcentratedBloodBucket.CONCENTRATED_BLOOD_BUCKET);
         register(HematicCatalyst.HEMATIC_CATALYST_KEY, HematicCatalyst.HEMATIC_CATALYST);
         register(BoneMarrow.BONE_MARROW_KEY, BoneMarrow.BONE_MARROW);
+        register(BloodSenseTools.VEINMAKER_KEY, BloodSenseTools.VEINMAKER);
+        register(BloodSenseTools.SANGUINE_FIXATIVE_KEY, BloodSenseTools.SANGUINE_FIXATIVE);
+        register(BloodSenseTools.ECHO_ASH_KEY, BloodSenseTools.ECHO_ASH);
+        register(BloodSenseTools.BOTTLED_BLOOD_KEY, BloodSenseTools.BOTTLED_BLOOD);
         register(Needle.NEEDLE_KEY, Needle.NEEDLE);
         register(SutureNeedle.SUTURE_NEEDLE_KEY, SutureNeedle.SUTURE_NEEDLE);
     }

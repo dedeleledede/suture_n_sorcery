@@ -4,6 +4,7 @@ import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.Condenser.CondenserItem;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomItem;
 import me.suture_n_sorcery.suture_n_sorcery.items.BoneMarrow;
+import me.suture_n_sorcery.suture_n_sorcery.items.BloodSenseTools;
 import me.suture_n_sorcery.suture_n_sorcery.items.ConcentratedBloodBucket;
 import me.suture_n_sorcery.suture_n_sorcery.items.DirtyGauze;
 import me.suture_n_sorcery.suture_n_sorcery.items.Gauze;
@@ -33,6 +34,10 @@ public final class ItemGroups {
                 entries.add(new ItemStack(RitualLoomItem.RITUAL_LOOM_ITEM));
                 entries.add(new ItemStack(HematicCatalyst.HEMATIC_CATALYST));
                 entries.add(new ItemStack(BoneMarrow.BONE_MARROW));
+                entries.add(new ItemStack(BloodSenseTools.VEINMAKER));
+                entries.add(new ItemStack(BloodSenseTools.SANGUINE_FIXATIVE));
+                entries.add(new ItemStack(BloodSenseTools.ECHO_ASH));
+                entries.add(new ItemStack(BloodSenseTools.BOTTLED_BLOOD));
                 entries.add(new ItemStack(Needle.NEEDLE));
                 entries.add(new ItemStack(SutureNeedle.SUTURE_NEEDLE));
             })
