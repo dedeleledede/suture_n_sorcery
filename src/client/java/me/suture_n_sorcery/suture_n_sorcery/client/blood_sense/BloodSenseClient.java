@@ -50,6 +50,7 @@ public final class BloodSenseClient {
     private static final int TRACE_EXPIRY_FADE_TICKS = 20 * 30;
     private static final float MAX_RADIUS = 16f;
     private static final float TRACE_EDGE_FADE_BLOCKS = 2.4f;
+    private static final float DETAILED_MARKER_DISTANCE = 11f;
     private static final float SPHERE_TEXTURE_TILES = 6f;
     private static final float INNER_SPHERE_SCALE = 0.36f;
     private static final float PILLAR_TEXTURE_ASPECT = 26f / 64f;
@@ -472,26 +473,105 @@ public final class BloodSenseClient {
             updateTraceVisibility(trace, distance, radius, scanAge);
             if (trace.visibility <= 0.01f) continue;
 
-            float mass = traceVisualMass(trace.strength);
-            float traceStrength = MathHelper.clamp((0.28f + mass * 0.72f) * strength * trace.visibility, 0f, 1.6f);
+            drawMarker(entry, vertices, trace, distance, strength, scanAge);
+        }
+    }
 
-            int alpha = Math.clamp((int)(85 + 145 * traceStrength), 70, 240);
-            int r = trace.type == 1 ? 255 : 220;
-            int g = trace.type == 1 ? 48 : 16;
-            int b = trace.type == 1 ? 96 : 34;
+    private static void drawMarker(MatrixStack.Entry entry, VertexConsumer vertices, ClientTrace trace, float distance, float strength, int scanAge) {
+        MarkerStyle style = markerStyle(trace, distance, strength, scanAge);
+        double x = trace.pos.getX() + 0.5;
+        double y0 = trace.pos.getY() + 0.06;
+        double z = trace.pos.getZ() + 0.5;
+        double y1 = y0 + style.height;
 
-            double x = trace.pos.getX() + 0.5;
-            double y0 = trace.pos.getY() + 0.06;
-            double y1 = y0 + 2.2 + mass * 5.8;
-            double z = trace.pos.getZ() + 0.5;
+        drawPillarBillboards(entry, vertices, x, y0, z, style.outerHalf, y1, style.r, style.g, style.b, style.outerAlpha);
+        drawPillarBillboards(entry, vertices, x, y0 + 0.08, z, style.coreHalf, y1 + 0.18, style.r, Math.min(90, style.g + 28), Math.min(120, style.b + 32), style.coreAlpha);
 
-            double height = y1 - y0;
-            double textureHalf = MathHelper.clamp((float)(height * PILLAR_TEXTURE_ASPECT * 0.5), 0.32f, 1.25f);
-            double inner = textureHalf * (0.34 + mass * 0.12);
-            double outer = textureHalf * (0.78 + mass * 0.18);
+        if (!style.distant) {
+            drawPulse(entry, vertices, x, y0, z, style, scanAge);
+            drawGroundWound(entry, vertices, x, y0 + 0.012, z, style);
+            if (trace.type == 1) {
+                drawRitualSpiral(entry, vertices, x, y0, z, style, scanAge);
+            }
+        }
+    }
 
-            drawPillarBillboards(entry, vertices, x, y0, z, outer, y1, r, g, b, alpha / 2);
-            drawPillarBillboards(entry, vertices, x, y0 + 0.16, z, inner, y1 + 0.36, 255, 55, 75, Math.clamp(alpha + 30, 120, 255));
+    private static MarkerStyle markerStyle(ClientTrace trace, float distance, float strength, int scanAge) {
+        float mass = traceVisualMass(trace.strength);
+        float age = MathHelper.clamp((trace.ageTicks + scanAge) / (float)TRACE_LIFETIME_TICKS, 0f, 1f);
+        float freshness = 1f - age;
+        boolean ritual = trace.type == 1;
+        boolean distant = distance > DETAILED_MARKER_DISTANCE;
+        float traceStrength = MathHelper.clamp((0.25f + mass * 0.75f) * strength * trace.visibility, 0f, 1.7f);
+
+        int r = ritual ? 255 : Math.round(MathHelper.lerp(freshness, 128f, 235f));
+        int g = ritual ? 42 : Math.round(MathHelper.lerp(freshness, 6f, 26f));
+        int b = ritual ? 92 : Math.round(MathHelper.lerp(freshness, 18f, 44f));
+        double height = (ritual ? 3.6 : 1.8) + mass * (ritual ? 5.4 : 4.8);
+        height *= MathHelper.lerp(age, 1.0f, 0.62f);
+        double textureHalf = MathHelper.clamp((float)(height * PILLAR_TEXTURE_ASPECT * 0.28), distant ? 0.055f : 0.12f, distant ? 0.18f : 0.82f);
+
+        int baseAlpha = Math.clamp((int)((ritual ? 125 : 105) * traceStrength * MathHelper.lerp(age, 1f, 0.58f)), 18, distant ? 105 : 210);
+        int coreAlpha = Math.clamp((int)((ritual ? 190 : 155) * traceStrength * freshness), distant ? 18 : 35, distant ? 115 : 235);
+        float pulseSpeed = ritual ? 0.19f : MathHelper.lerp(freshness, 0.045f, 0.135f);
+
+        return new MarkerStyle(
+                r, g, b,
+                baseAlpha,
+                coreAlpha,
+                height,
+                textureHalf * (distant ? 0.38 : 0.82),
+                textureHalf * (distant ? 0.55 : 1.0),
+                pulseSpeed,
+                mass,
+                freshness,
+                distant
+        );
+    }
+
+    private static void drawPulse(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y0, double z, MarkerStyle style, int scanAge) {
+        double travel = ((scanAge * style.pulseSpeed) % 1.0);
+        double bandHeight = Math.max(0.34, style.height * 0.16);
+        double bandBottom = y0 + travel * Math.max(0.1, style.height - bandHeight);
+        double bandTop = bandBottom + bandHeight;
+        int alpha = Math.clamp((int)(style.coreAlpha * (0.62 + style.freshness * 0.38)), 25, 245);
+        double half = Math.max(0.045, style.coreHalf * 0.48);
+
+        drawPillarBillboards(entry, vertices, x, bandBottom, z, half, bandTop, 255, 72, 92, alpha);
+    }
+
+    private static void drawGroundWound(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y, double z, MarkerStyle style) {
+        double half = MathHelper.clamp((float)(style.outerHalf * (1.5 + style.mass)), 0.22f, 1.15f);
+        int alpha = Math.clamp((int)(style.outerAlpha * 0.62), 18, 150);
+
+        addTexturedQuad(entry, vertices,
+                x - half, y, z - half,
+                x + half, y, z - half,
+                x + half, y, z + half,
+                x - half, y, z + half,
+                120, 4, 18, alpha);
+    }
+
+    private static void drawRitualSpiral(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y0, double z, MarkerStyle style, int scanAge) {
+        int segments = 10;
+        double heightStep = style.height / segments;
+        double spin = scanAge * 0.045;
+
+        for (int i = 0; i < segments; i++) {
+            double yA = y0 + i * heightStep;
+            double yB = yA + heightStep * 0.72;
+            double a0 = spin + i * 0.82;
+            double a1 = spin + (i + 0.55) * 0.82;
+            double radius = style.outerHalf * 1.12;
+            double half = Math.max(0.022, style.coreHalf * 0.16);
+            int alpha = Math.clamp((int)(style.coreAlpha * 0.72), 24, 180);
+
+            addTexturedQuad(entry, vertices,
+                    x + Math.cos(a0) * radius - half, yA, z + Math.sin(a0) * radius,
+                    x + Math.cos(a0) * radius + half, yA, z + Math.sin(a0) * radius,
+                    x + Math.cos(a1) * radius + half, yB, z + Math.sin(a1) * radius,
+                    x + Math.cos(a1) * radius - half, yB, z + Math.sin(a1) * radius,
+                    255, 74, 98, alpha);
         }
     }
 
@@ -589,5 +669,21 @@ public final class BloodSenseClient {
     }
 
     private record ScreenBubble(float x, float y, float radius) {
+    }
+
+    private record MarkerStyle(
+            int r,
+            int g,
+            int b,
+            int outerAlpha,
+            int coreAlpha,
+            double height,
+            double coreHalf,
+            double outerHalf,
+            float pulseSpeed,
+            float mass,
+            float freshness,
+            boolean distant
+    ) {
     }
 }

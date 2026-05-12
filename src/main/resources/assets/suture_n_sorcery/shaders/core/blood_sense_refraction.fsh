@@ -32,7 +32,11 @@ void main() {
     vec4 scene = texture(Sampler0, refractedUv);
 
     float alpha = clamp(strength * field * screenReach * 0.52, 0.0, 0.52);
+    float luminance = dot(scene.rgb, vec3(0.299, 0.587, 0.114));
+    float redMemory = smoothstep(0.02, 0.35, scene.r - max(scene.g, scene.b));
+    vec3 desaturated = mix(vec3(luminance), scene.rgb, mix(0.42, 1.0, redMemory));
+    vec3 darkened = desaturated * (1.0 - field * strength * 0.16);
     vec3 tint = vec3(0.24, 0.015, 0.035) * field * strength;
-    vec3 tintedScene = mix(scene.rgb, scene.rgb + tint, clamp(field * strength * 0.55, 0.0, 0.55));
+    vec3 tintedScene = mix(darkened, darkened + tint, clamp(field * strength * 0.55, 0.0, 0.55));
     fragColor = vec4(tintedScene, alpha);
 }
