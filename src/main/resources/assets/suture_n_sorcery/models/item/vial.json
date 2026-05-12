@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "suture_n_sorcery:item/vial_of_blood"
+    "layer0": "suture_n_sorcery:item/empty_vial"
   }
 }

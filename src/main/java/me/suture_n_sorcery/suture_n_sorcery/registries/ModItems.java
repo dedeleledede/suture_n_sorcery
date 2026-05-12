@@ -33,6 +33,7 @@ public final class ModItems {
         register(BloodSenseTools.VEINMAKER_KEY, BloodSenseTools.VEINMAKER);
         register(BloodSenseTools.SANGUINE_FIXATIVE_KEY, BloodSenseTools.SANGUINE_FIXATIVE);
         register(BloodSenseTools.ECHO_ASH_KEY, BloodSenseTools.ECHO_ASH);
+        register(BloodSenseTools.VIAL_KEY, BloodSenseTools.VIAL);
         register(BloodSenseTools.BOTTLED_BLOOD_KEY, BloodSenseTools.BOTTLED_BLOOD);
         register(Needle.NEEDLE_KEY, Needle.NEEDLE);
         register(SutureNeedle.SUTURE_NEEDLE_KEY, SutureNeedle.SUTURE_NEEDLE);

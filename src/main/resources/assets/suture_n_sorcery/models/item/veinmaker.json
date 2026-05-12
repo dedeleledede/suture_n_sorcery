@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "suture_n_sorcery:item/suture_needle"
+    "layer0": "suture_n_sorcery:item/veinmaker"
   }
 }

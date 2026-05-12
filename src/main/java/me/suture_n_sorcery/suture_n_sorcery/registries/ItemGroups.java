@@ -37,6 +37,7 @@ public final class ItemGroups {
                 entries.add(new ItemStack(BloodSenseTools.VEINMAKER));
                 entries.add(new ItemStack(BloodSenseTools.SANGUINE_FIXATIVE));
                 entries.add(new ItemStack(BloodSenseTools.ECHO_ASH));
+                entries.add(new ItemStack(BloodSenseTools.VIAL));
                 entries.add(new ItemStack(BloodSenseTools.BOTTLED_BLOOD));
                 entries.add(new ItemStack(Needle.NEEDLE));
                 entries.add(new ItemStack(SutureNeedle.SUTURE_NEEDLE));

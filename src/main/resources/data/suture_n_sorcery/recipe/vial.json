@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "G",
+    "G"
+  ],
+  "key": {
+    "G": "minecraft:glass"
+  },
+  "result": {
+    "id": "suture_n_sorcery:vial",
+    "count": 4
+  }
+}

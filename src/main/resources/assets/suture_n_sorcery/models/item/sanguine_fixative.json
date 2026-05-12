@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "suture_n_sorcery:item/concentrated_blood_bucket"
+    "layer0": "suture_n_sorcery:item/vial_of_blood"
   }
 }
