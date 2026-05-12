@@ -26,7 +26,7 @@ public record BloodSenseResponsePayload(List<Trace> traces) implements CustomPay
         return ID;
     }
 
-    public record Trace(int type, int x, int y, int z, int strength, int ageTicks) {
+    public record Trace(int type, int x, int y, int z, int strength, int ageTicks, int state) {
         public static final PacketCodec<RegistryByteBuf, Trace> CODEC = PacketCodec.tuple(
                 PacketCodecs.VAR_INT, Trace::type,
                 PacketCodecs.VAR_INT, Trace::x,
@@ -34,6 +34,7 @@ public record BloodSenseResponsePayload(List<Trace> traces) implements CustomPay
                 PacketCodecs.VAR_INT, Trace::z,
                 PacketCodecs.VAR_INT, Trace::strength,
                 PacketCodecs.VAR_INT, Trace::ageTicks,
+                PacketCodecs.VAR_INT, Trace::state,
                 Trace::new
         );
     }

@@ -148,7 +148,8 @@ public final class BloodSenseClient {
                     trace.type(),
                     new BlockPos(trace.x(), trace.y(), trace.z()),
                     trace.strength(),
-                    trace.ageTicks()
+                    trace.ageTicks(),
+                    trace.state()
             ));
         }
         remainingTicks = DURATION_TICKS;
@@ -582,9 +583,10 @@ public final class BloodSenseClient {
         double bodyHalf = MathHelper.clamp((float)(height * PILLAR_BODY_TEXTURE_ASPECT * 0.26), distant ? 0.055f : 0.12f, distant ? 0.18f : 0.78f);
         double coreHalf = MathHelper.clamp((float)(height * PILLAR_CORE_TEXTURE_ASPECT * 0.16), distant ? 0.035f : 0.055f, distant ? 0.10f : 0.36f);
 
-        int baseAlpha = Math.clamp((int)((ritual ? 150 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f)), 34, distant ? 130 : 235);
-        int coreAlpha = Math.clamp((int)((ritual ? 215 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f)), distant ? 30 : 58, distant ? 145 : 250);
-        float pulseSpeed = ritual ? 0.19f : MathHelper.lerp(freshness, 0.045f, 0.135f);
+        boolean contained = trace.state == 3;
+        int baseAlpha = Math.clamp((int)((ritual ? 150 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f) * (contained ? 1.18f : 1f)), 34, distant ? 130 : 235);
+        int coreAlpha = Math.clamp((int)((ritual ? 215 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f) * (contained ? 1.22f : 1f)), distant ? 30 : 58, distant ? 145 : 255);
+        float pulseSpeed = contained ? 0.24f : ritual ? 0.19f : MathHelper.lerp(freshness, 0.045f, 0.135f);
 
         return new MarkerStyle(
                 r, g, b,
@@ -817,14 +819,16 @@ public final class BloodSenseClient {
         private final BlockPos pos;
         private final int strength;
         private final int ageTicks;
+        private final int state;
         private float visibility;
         private float distance;
 
-        private ClientTrace(int type, BlockPos pos, int strength, int ageTicks) {
+        private ClientTrace(int type, BlockPos pos, int strength, int ageTicks, int state) {
             this.type = type;
             this.pos = pos;
             this.strength = strength;
             this.ageTicks = ageTicks;
+            this.state = state;
             this.visibility = 0f;
             this.distance = 0f;
         }

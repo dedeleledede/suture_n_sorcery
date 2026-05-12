@@ -9,7 +9,8 @@ public record BloodSenseTrace(
         RegistryKey<World> worldKey,
         BlockPos pos,
         long createdTime,
-        int strength
+        int strength,
+        int state
 ) {
     public int age(long now) {
         return (int)Math.max(0, now - createdTime);

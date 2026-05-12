@@ -17,7 +17,8 @@ public final class BloodSenseWorldState extends PersistentState {
             Codec.INT.fieldOf("type").forGetter(StoredTrace::type),
             BlockPos.CODEC.fieldOf("pos").forGetter(StoredTrace::pos),
             Codec.LONG.fieldOf("created_time").forGetter(StoredTrace::createdTime),
-            Codec.INT.fieldOf("strength").forGetter(StoredTrace::strength)
+            Codec.INT.fieldOf("strength").forGetter(StoredTrace::strength),
+            Codec.INT.optionalFieldOf("state", BloodSenseTracker.STATE_HIDDEN).forGetter(StoredTrace::state)
     ).apply(instance, StoredTrace::new));
 
     private static final Codec<BloodSenseWorldState> CODEC = STORED_TRACE_CODEC.listOf()
@@ -46,6 +47,6 @@ public final class BloodSenseWorldState extends PersistentState {
         return traces;
     }
 
-    public record StoredTrace(int type, BlockPos pos, long createdTime, int strength) {
+    public record StoredTrace(int type, BlockPos pos, long createdTime, int strength, int state) {
     }
 }

@@ -117,7 +117,8 @@ public final class ModNetworking {
                 pos.getY(),
                 pos.getZ(),
                 trace.strength(),
-                trace.age(now)
+                trace.age(now),
+                trace.state()
         );
     }
 

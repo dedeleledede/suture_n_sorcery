@@ -12,7 +12,7 @@ public final class BloodSenseTools {
 
     public static final Identifier VEINMAKER_ID = Identifier.of(Suture_n_sorcery.MOD_ID, "veinmaker");
     public static final RegistryKey<Item> VEINMAKER_KEY = RegistryKey.of(RegistryKeys.ITEM, VEINMAKER_ID);
-    public static final Item VEINMAKER = new Item(new Item.Settings()
+    public static final Item VEINMAKER = new Veinmaker(new Item.Settings()
             .registryKey(VEINMAKER_KEY)
             .maxCount(1)
     );

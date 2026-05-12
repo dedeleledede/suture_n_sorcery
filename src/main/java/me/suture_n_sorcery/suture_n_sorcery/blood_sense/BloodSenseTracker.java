@@ -19,6 +19,7 @@ import java.util.UUID;
 public final class BloodSenseTracker {
 
     private static final int TRACE_LIFETIME_TICKS = 20 * 60 * 12;
+    private static final int CONTAINED_TRACE_LIFETIME_TICKS = 20 * 60 * 20;
     private static final int MAX_TRACES_PER_WORLD = 512;
     private static final int PRUNE_INTERVAL_TICKS = 20 * 30;
 
@@ -26,8 +27,9 @@ public final class BloodSenseTracker {
     private static final int MAX_TRACE_STRENGTH = 1800;
     private static final int ACTIVE_SENSE_GRACE_TICKS = 20 * 8;
     private static final int ECHO_ASH_RADIUS = 16;
-    private static final float ECHO_ASH_DROP_CHANCE = 0.45f;
     private static final Map<UUID, Long> ACTIVE_BLOOD_SENSE = new HashMap<>();
+    public static final int STATE_HIDDEN = 0;
+    public static final int STATE_CONTAINED = 3;
 
     private BloodSenseTracker() {
     }
@@ -64,7 +66,8 @@ public final class BloodSenseTracker {
                 type.ordinal(),
                 pos.toImmutable(),
                 world.getTime() - Math.max(0, ageTicks),
-                Math.min(MAX_TRACE_STRENGTH, Math.max(1, strength))
+                Math.min(MAX_TRACE_STRENGTH, Math.max(1, strength)),
+                STATE_HIDDEN
         ));
 
         if (state.traces().size() > MAX_TRACES_PER_WORLD) {
@@ -78,6 +81,44 @@ public final class BloodSenseTracker {
         ACTIVE_BLOOD_SENSE.put(playerUuid, world.getTime() + ACTIVE_SENSE_GRACE_TICKS);
     }
 
+    public static boolean isBloodSenseActive(ServerWorld world, UUID playerUuid) {
+        return ACTIVE_BLOOD_SENSE.getOrDefault(playerUuid, 0L) >= world.getTime();
+    }
+
+    public static boolean containNearest(ServerWorld world, BlockPos center, int radius) {
+        prune(world);
+
+        BloodSenseWorldState state = state(world);
+        List<BloodSenseWorldState.StoredTrace> traces = state.traces();
+        int bestIndex = -1;
+        long bestDistance = Long.MAX_VALUE;
+        long radiusSquared = (long) radius * radius;
+
+        for (int i = 0; i < traces.size(); i++) {
+            BloodSenseWorldState.StoredTrace trace = traces.get(i);
+            if (trace.state() == STATE_CONTAINED) continue;
+
+            long distance = (long) trace.pos().getSquaredDistance(center);
+            if (distance <= radiusSquared && distance < bestDistance) {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex < 0) return false;
+
+        BloodSenseWorldState.StoredTrace trace = traces.get(bestIndex);
+        traces.set(bestIndex, new BloodSenseWorldState.StoredTrace(
+                trace.type(),
+                trace.pos(),
+                world.getTime(),
+                trace.strength(),
+                STATE_CONTAINED
+        ));
+        state.markDirty();
+        return true;
+    }
+
     public static List<BloodSenseTrace> recentTraces(ServerWorld world, BlockPos center, int radius) {
         prune(world);
 
@@ -88,7 +129,8 @@ public final class BloodSenseTracker {
                         world.getRegistryKey(),
                         trace.pos(),
                         trace.createdTime(),
-                        trace.strength()
+                        trace.strength(),
+                        trace.state()
                 ))
                 .filter(trace -> trace.pos().getSquaredDistance(center) <= radiusSquared)
                 .sorted(Comparator.comparingInt(trace -> trace.pos().getManhattanDistance(center)))
@@ -117,14 +159,16 @@ public final class BloodSenseTracker {
                     type.ordinal(),
                     mergedPos,
                     now,
-                    combinedStrength
+                    combinedStrength,
+                    STATE_HIDDEN
             ));
         } else {
             traces.add(new BloodSenseWorldState.StoredTrace(
                     type.ordinal(),
                     pos.toImmutable(),
                     now,
-                    Math.min(MAX_TRACE_STRENGTH, Math.max(1, strength))
+                    Math.min(MAX_TRACE_STRENGTH, Math.max(1, strength)),
+                    STATE_HIDDEN
             ));
         }
 
@@ -173,7 +217,10 @@ public final class BloodSenseTracker {
         List<BloodSenseWorldState.StoredTrace> traces = state.traces();
 
         long now = world.getTime();
-        boolean removed = traces.removeIf(trace -> now - trace.createdTime() >= TRACE_LIFETIME_TICKS);
+        boolean removed = traces.removeIf(trace -> {
+            int lifetime = trace.state() == STATE_CONTAINED ? CONTAINED_TRACE_LIFETIME_TICKS : TRACE_LIFETIME_TICKS;
+            return now - trace.createdTime() >= lifetime;
+        });
         ACTIVE_BLOOD_SENSE.entrySet().removeIf(entry -> entry.getValue() < now);
         if (removed) {
             state.markDirty();
@@ -181,7 +228,7 @@ public final class BloodSenseTracker {
     }
 
     private static void tryDropEchoAsh(ServerWorld world, LivingEntity entity) {
-        if (entity instanceof PlayerEntity || !entity.isOnFire() || world.random.nextFloat() > ECHO_ASH_DROP_CHANCE) return;
+        if (entity instanceof PlayerEntity || (entity.getFireTicks() <= 0 && !entity.isOnFire())) return;
 
         long now = world.getTime();
         long radiusSquared = (long)ECHO_ASH_RADIUS * ECHO_ASH_RADIUS;
