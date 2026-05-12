@@ -19,24 +19,23 @@ void main() {
     float dist = length(delta);
     float screenReach = smoothstep(0.0, 1.15, radius);
     float field = 1.0 - smoothstep(0.0, 1.45, dist);
-    if (field <= 0.001) {
-        discard;
-    }
+    float mood = strength * screenReach;
 
     vec2 dir = dist > 0.0001 ? delta / dist : vec2(0.0, 1.0);
     vec2 unscaledDir = dir / aspect;
     float ripple = sin((dist * 54.0) - GameTime * 1700.0) * 0.5 + 0.5;
-    float pull = strength * field * screenReach * (0.018 + ripple * 0.011);
+    float pull = strength * field * screenReach * (0.010 + ripple * 0.006);
 
     vec2 refractedUv = clamp(v_uv - unscaledDir * pull, vec2(0.001), vec2(0.999));
     vec4 scene = texture(Sampler0, refractedUv);
 
-    float alpha = clamp(strength * field * screenReach * 0.52, 0.0, 0.52);
     float luminance = dot(scene.rgb, vec3(0.299, 0.587, 0.114));
     float redMemory = smoothstep(0.02, 0.35, scene.r - max(scene.g, scene.b));
-    vec3 desaturated = mix(vec3(luminance), scene.rgb, mix(0.42, 1.0, redMemory));
-    vec3 darkened = desaturated * (1.0 - field * strength * 0.16);
+    float desaturation = (1.0 - redMemory) * mood * 0.90;
+    vec3 desaturated = mix(scene.rgb, vec3(luminance), desaturation);
+    vec3 darkened = desaturated * (1.0 - mood * 0.16);
     vec3 tint = vec3(0.24, 0.015, 0.035) * field * strength;
     vec3 tintedScene = mix(darkened, darkened + tint, clamp(field * strength * 0.55, 0.0, 0.55));
+    float alpha = clamp(mood * 0.72, 0.0, 0.72);
     fragColor = vec4(tintedScene, alpha);
 }

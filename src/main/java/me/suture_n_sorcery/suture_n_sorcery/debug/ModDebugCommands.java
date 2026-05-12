@@ -2,13 +2,18 @@ package me.suture_n_sorcery.suture_n_sorcery.debug;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTraceType;
+import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTracker;
 import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.Hand;
+import net.minecraft.util.math.BlockPos;
 
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
@@ -43,7 +48,23 @@ public final class ModDebugCommands {
                                 .executes(context -> unlinkCatalyst(context.getSource())))
                         .then(literal("bond")
                                 .then(literal("clear")
-                                        .executes(context -> clearPlayerBond(context.getSource()))))));
+                                        .executes(context -> clearPlayerBond(context.getSource())))))
+                .then(literal("bloodsense")
+                        .then(literal("spawn")
+                                .then(argument("type", StringArgumentType.word())
+                                        .suggests((context, builder) -> {
+                                            builder.suggest("death");
+                                            builder.suggest("ritual");
+                                            return builder.buildFuture();
+                                        })
+                                        .then(argument("strength", IntegerArgumentType.integer(1, 1800))
+                                                .then(argument("ageTicks", IntegerArgumentType.integer(0, 14400))
+                                                        .executes(context -> spawnBloodSenseTrace(
+                                                                context.getSource(),
+                                                                StringArgumentType.getString(context, "type"),
+                                                                IntegerArgumentType.getInteger(context, "strength"),
+                                                                IntegerArgumentType.getInteger(context, "ageTicks")
+                                                        ))))))));
     }
 
     private static int addGrowth(ServerCommandSource source, int amount) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
@@ -90,6 +111,25 @@ public final class ModDebugCommands {
         ServerPlayerEntity player = source.getPlayerOrThrow();
         HematicCatalyst.setAbsorbedCatalyst(player, false);
         source.sendFeedback(() -> Text.literal("hematic catalyst absorption bond cleared"), false);
+        return 1;
+    }
+
+    private static int spawnBloodSenseTrace(ServerCommandSource source, String typeName, int strength, int ageTicks) throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        ServerPlayerEntity player = source.getPlayerOrThrow();
+        ServerWorld world = source.getWorld();
+        BloodSenseTraceType type = switch (typeName) {
+            case "ritual" -> BloodSenseTraceType.RITUAL;
+            case "death" -> BloodSenseTraceType.DEATH;
+            default -> null;
+        };
+        if (type == null) {
+            source.sendError(Text.literal("type must be death or ritual"));
+            return 0;
+        }
+
+        BlockPos pos = player.getBlockPos();
+        BloodSenseTracker.recordDebug(world, type, pos, strength, ageTicks);
+        source.sendFeedback(() -> Text.literal("spawned " + typeName + " blood sense trace at " + pos.toShortString()), false);
         return 1;
     }
 

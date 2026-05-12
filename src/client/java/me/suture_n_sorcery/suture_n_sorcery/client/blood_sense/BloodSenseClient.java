@@ -53,10 +53,15 @@ public final class BloodSenseClient {
     private static final float DETAILED_MARKER_DISTANCE = 11f;
     private static final float SPHERE_TEXTURE_TILES = 6f;
     private static final float INNER_SPHERE_SCALE = 0.36f;
-    private static final float PILLAR_TEXTURE_ASPECT = 26f / 64f;
+    private static final float PILLAR_BODY_TEXTURE_ASPECT = 24f / 64f;
+    private static final float PILLAR_CORE_TEXTURE_ASPECT = 24f / 64f;
     private static final Identifier SPHERE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere.png");
     private static final Identifier SPHERE_TEXTURE_INNER = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere_inner.png");
-    private static final Identifier PILLAR_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar.png");
+    private static final Identifier PILLAR_BODY_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar_body.png");
+    private static final Identifier PILLAR_CORE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar_core.png");
+    private static final Identifier PILLAR_PULSE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar_core.png");
+    private static final Identifier GROUND_WOUND_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_ground_wound.png");
+    private static final Identifier RITUAL_THREAD_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_thread.png");
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
     private static final RenderPhase.TextureBase FRAMEBUFFER_TEXTURE = new RenderPhase.TextureBase(
             // bind the current world color buffer so the sphere can bend the scene behind it.
@@ -185,8 +190,13 @@ public final class BloodSenseClient {
         );
 
         RenderLayer innerSphereLayer = RenderLayer.getEntityTranslucent(SPHERE_TEXTURE_INNER);
-        RenderLayer pillarLayer = RenderLayer.getEntityTranslucent(PILLAR_TEXTURE);
+        RenderLayer pillarBodyLayer = RenderLayer.getEntityTranslucent(PILLAR_BODY_TEXTURE);
+        RenderLayer pillarCoreLayer = RenderLayer.getEntityTranslucent(PILLAR_CORE_TEXTURE);
+        RenderLayer pillarPulseLayer = RenderLayer.getEntityTranslucent(PILLAR_PULSE_TEXTURE);
+        RenderLayer groundWoundLayer = RenderLayer.getEntityTranslucent(GROUND_WOUND_TEXTURE);
+        RenderLayer ritualThreadLayer = RenderLayer.getEntityTranslucent(RITUAL_THREAD_TEXTURE);
         RenderLayer sphereRefractionLayer = bloodSenseSphereRefractionLayer();
+        updateTraceMarkers(client.player, radius, (int)age);
 
         drawLayer(sphereRefractionLayer, vertices ->
                 drawRefractionSphere(entry, vertices, center, radius, strength)
@@ -200,9 +210,11 @@ public final class BloodSenseClient {
                 drawShaderSphere(entry, vertices, client.world, center, radius, strength)
         );
 
-        drawLayer(pillarLayer, vertices ->
-                drawTracePillars(entry, vertices, client.player, radius, strength, (int)age)
-        );
+        drawLayer(groundWoundLayer, vertices -> drawGroundWounds(entry, vertices, client.world, strength, (int)age));
+        drawLayer(pillarBodyLayer, vertices -> drawMarkerBodies(entry, vertices, camera, strength, (int)age));
+        drawLayer(pillarCoreLayer, vertices -> drawMarkerCores(entry, vertices, camera, strength, (int)age));
+        drawLayer(pillarPulseLayer, vertices -> drawMarkerPulses(entry, vertices, camera, strength, (int)age));
+        drawLayer(ritualThreadLayer, vertices -> drawRitualThreads(entry, vertices, camera, strength, (int)age));
 
         matrices.pop();
     }
@@ -228,8 +240,12 @@ public final class BloodSenseClient {
     }
 
     private static void drawScreenRefraction(MinecraftClient client, Vec3d center, float radius, float strength) {
+        if (strength <= 0.001f) return;
+
         ScreenBubble bubble = projectBubble(client, center, radius);
-        if (bubble == null || strength <= 0.001f) return;
+        if (bubble == null) {
+            bubble = new ScreenBubble(0.5f, 0.5f, 1.2f);
+        }
 
         RenderLayer layer = bloodSenseRefractionLayer();
         int cx = Math.clamp((int)(bubble.x * 255f), 0, 255);
@@ -465,35 +481,89 @@ public final class BloodSenseClient {
         return smooth(lowerHemisphere);
     }
 
-    private static void drawTracePillars(MatrixStack.Entry entry, VertexConsumer vertices, ClientPlayerEntity player, float radius, float strength, int scanAge) {
+    private static void updateTraceMarkers(ClientPlayerEntity player, float radius, int scanAge) {
         for (ClientTrace trace : visibleTraces) {
             double dx = (trace.pos.getX() + 0.5) - player.getX();
             double dz = (trace.pos.getZ() + 0.5) - player.getZ();
             float distance = MathHelper.sqrt((float)(dx * dx + dz * dz));
+            trace.distance = distance;
             updateTraceVisibility(trace, distance, radius, scanAge);
-            if (trace.visibility <= 0.01f) continue;
-
-            drawMarker(entry, vertices, trace, distance, strength, scanAge);
         }
     }
 
-    private static void drawMarker(MatrixStack.Entry entry, VertexConsumer vertices, ClientTrace trace, float distance, float strength, int scanAge) {
-        MarkerStyle style = markerStyle(trace, distance, strength, scanAge);
-        double x = trace.pos.getX() + 0.5;
-        double y0 = trace.pos.getY() + 0.06;
-        double z = trace.pos.getZ() + 0.5;
-        double y1 = y0 + style.height;
+    private static void drawMarkerBodies(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, float strength, int scanAge) {
+        for (ClientTrace trace : visibleTraces) {
+            if (trace.visibility <= 0.01f) continue;
 
-        drawPillarBillboards(entry, vertices, x, y0, z, style.outerHalf, y1, style.r, style.g, style.b, style.outerAlpha);
-        drawPillarBillboards(entry, vertices, x, y0 + 0.08, z, style.coreHalf, y1 + 0.18, style.r, Math.min(90, style.g + 28), Math.min(120, style.b + 32), style.coreAlpha);
+            MarkerStyle style = markerStyle(trace, strength, scanAge);
+            double x = trace.pos.getX() + 0.5;
+            double y0 = trace.pos.getY() + 0.06;
+            double z = trace.pos.getZ() + 0.5;
+            drawPillarBillboardUv(entry, vertices, camera, x, y0, z, style.outerHalf, y0 + style.height, 0.024, bodyVOffset(scanAge, style), style.r, style.g, style.b, style.outerAlpha);
+        }
+    }
 
-        if (!style.distant) {
-            drawPulse(entry, vertices, x, y0, z, style, scanAge);
-            drawGroundWound(entry, vertices, x, y0 + 0.012, z, style);
-            if (trace.type == 1) {
-                drawRitualSpiral(entry, vertices, x, y0, z, style, scanAge);
+    private static void drawMarkerCores(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, float strength, int scanAge) {
+        for (ClientTrace trace : visibleTraces) {
+            if (trace.visibility <= 0.01f) continue;
+
+            MarkerStyle style = markerStyle(trace, strength, scanAge);
+            double x = trace.pos.getX() + 0.5;
+            double y0 = trace.pos.getY() + 0.14;
+            double z = trace.pos.getZ() + 0.5;
+            drawPillarBillboardUv(entry, vertices, camera, x, y0, z, style.coreHalf, y0 + style.height, 0.048, coreVOffset(scanAge), style.r, Math.min(90, style.g + 28), Math.min(120, style.b + 32), style.coreAlpha);
+        }
+    }
+
+    private static void drawMarkerPulses(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, float strength, int scanAge) {
+        for (ClientTrace trace : visibleTraces) {
+            if (trace.visibility <= 0.01f) continue;
+
+            MarkerStyle style = markerStyle(trace, strength, scanAge);
+            if (!style.distant) {
+                double x = trace.pos.getX() + 0.5;
+                double y0 = trace.pos.getY() + 0.06;
+                double z = trace.pos.getZ() + 0.5;
+                drawPulse(entry, vertices, camera, x, y0, z, style, scanAge);
             }
         }
+    }
+
+    private static void drawGroundWounds(MatrixStack.Entry entry, VertexConsumer vertices, BlockView world, float strength, int scanAge) {
+        for (ClientTrace trace : visibleTraces) {
+            if (trace.visibility <= 0.01f) continue;
+
+            MarkerStyle style = markerStyle(trace, strength, scanAge);
+            if (!style.distant && hasGroundWoundSurface(world, trace.pos)) {
+                double x = trace.pos.getX() + 0.5;
+                double y0 = trace.pos.getY() + 0.018;
+                double z = trace.pos.getZ() + 0.5;
+                drawGroundWound(entry, vertices, x, y0, z, style);
+            }
+        }
+    }
+
+    private static void drawRitualThreads(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, float strength, int scanAge) {
+        for (ClientTrace trace : visibleTraces) {
+            if (trace.visibility <= 0.01f) continue;
+
+            MarkerStyle style = markerStyle(trace, strength, scanAge);
+            if (!style.distant && trace.type == 1) {
+                double x = trace.pos.getX() + 0.5;
+                double y0 = trace.pos.getY() + 0.06;
+                double z = trace.pos.getZ() + 0.5;
+                drawRitualSpiral(entry, vertices, camera, x, y0, z, style, scanAge);
+            }
+        }
+    }
+
+    private static boolean hasGroundWoundSurface(BlockView world, BlockPos pos) {
+        BlockPos below = pos.down();
+        return world.getBlockState(below).isSolidBlock(world, below) || world.getBlockState(pos).isSolidBlock(world, pos);
+    }
+
+    private static MarkerStyle markerStyle(ClientTrace trace, float strength, int scanAge) {
+        return markerStyle(trace, trace.distance, strength, scanAge);
     }
 
     private static MarkerStyle markerStyle(ClientTrace trace, float distance, float strength, int scanAge) {
@@ -509,7 +579,8 @@ public final class BloodSenseClient {
         int b = ritual ? 92 : Math.round(MathHelper.lerp(freshness, 18f, 44f));
         double height = (ritual ? 3.6 : 1.8) + mass * (ritual ? 5.4 : 4.8);
         height *= MathHelper.lerp(age, 1.0f, 0.62f);
-        double textureHalf = MathHelper.clamp((float)(height * PILLAR_TEXTURE_ASPECT * 0.28), distant ? 0.055f : 0.12f, distant ? 0.18f : 0.82f);
+        double bodyHalf = MathHelper.clamp((float)(height * PILLAR_BODY_TEXTURE_ASPECT * 0.26), distant ? 0.055f : 0.12f, distant ? 0.18f : 0.78f);
+        double coreHalf = MathHelper.clamp((float)(height * PILLAR_CORE_TEXTURE_ASPECT * 0.16), distant ? 0.035f : 0.055f, distant ? 0.10f : 0.36f);
 
         int baseAlpha = Math.clamp((int)((ritual ? 125 : 105) * traceStrength * MathHelper.lerp(age, 1f, 0.58f)), 18, distant ? 105 : 210);
         int coreAlpha = Math.clamp((int)((ritual ? 190 : 155) * traceStrength * freshness), distant ? 18 : 35, distant ? 115 : 235);
@@ -520,8 +591,8 @@ public final class BloodSenseClient {
                 baseAlpha,
                 coreAlpha,
                 height,
-                textureHalf * (distant ? 0.38 : 0.82),
-                textureHalf * (distant ? 0.55 : 1.0),
+                coreHalf,
+                bodyHalf,
                 pulseSpeed,
                 mass,
                 freshness,
@@ -529,7 +600,7 @@ public final class BloodSenseClient {
         );
     }
 
-    private static void drawPulse(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y0, double z, MarkerStyle style, int scanAge) {
+    private static void drawPulse(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, MarkerStyle style, int scanAge) {
         double travel = ((scanAge * style.pulseSpeed) % 1.0);
         double bandHeight = Math.max(0.34, style.height * 0.16);
         double bandBottom = y0 + travel * Math.max(0.1, style.height - bandHeight);
@@ -537,42 +608,66 @@ public final class BloodSenseClient {
         int alpha = Math.clamp((int)(style.coreAlpha * (0.62 + style.freshness * 0.38)), 25, 245);
         double half = Math.max(0.045, style.coreHalf * 0.48);
 
-        drawPillarBillboards(entry, vertices, x, bandBottom, z, half, bandTop, 255, 72, 92, alpha);
+        drawPillarBillboard(entry, vertices, camera, x, bandBottom, z, half, bandTop, 0.054, 255, 72, 92, alpha);
     }
 
     private static void drawGroundWound(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y, double z, MarkerStyle style) {
-        double half = MathHelper.clamp((float)(style.outerHalf * (1.5 + style.mass)), 0.22f, 1.15f);
-        int alpha = Math.clamp((int)(style.outerAlpha * 0.62), 18, 150);
+        double half = MathHelper.clamp((float)(style.outerHalf * (2.0 + style.mass * 0.9)), 0.38f, 1.55f);
+        int alpha = Math.clamp((int)(style.outerAlpha * 1.35), 95, 245);
 
         addTexturedQuad(entry, vertices,
                 x - half, y, z - half,
                 x + half, y, z - half,
                 x + half, y, z + half,
                 x - half, y, z + half,
-                120, 4, 18, alpha);
+                255, 42, 58, alpha);
+        double glowHalf = half * 1.32;
+        addTexturedQuad(entry, vertices,
+                x - glowHalf, y + 0.003, z - glowHalf,
+                x + glowHalf, y + 0.003, z - glowHalf,
+                x + glowHalf, y + 0.003, z + glowHalf,
+                x - glowHalf, y + 0.003, z + glowHalf,
+                255, 18, 34, Math.clamp((int)(alpha * 0.42), 35, 120));
     }
 
-    private static void drawRitualSpiral(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y0, double z, MarkerStyle style, int scanAge) {
-        int segments = 10;
+    private static void drawRitualSpiral(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, MarkerStyle style, int scanAge) {
+        int segments = 28;
         double heightStep = style.height / segments;
-        double spin = scanAge * 0.045;
+        double spin = scanAge * 0.042;
+        double offset = 0.086;
 
-        for (int i = 0; i < segments; i++) {
-            double yA = y0 + i * heightStep;
-            double yB = yA + heightStep * 0.72;
-            double a0 = spin + i * 0.82;
-            double a1 = spin + (i + 0.55) * 0.82;
-            double radius = style.outerHalf * 1.12;
-            double half = Math.max(0.022, style.coreHalf * 0.16);
-            int alpha = Math.clamp((int)(style.coreAlpha * 0.72), 24, 180);
+        for (int strand = 0; strand < 3; strand++) {
+            double phase = strand * (Math.PI * 2.0 / 3.0);
+            double strandRadius = style.outerHalf * (0.72 + strand * 0.16);
+            int alpha = Math.clamp((int)(style.coreAlpha * (0.62 - strand * 0.08)), 36, 190);
+            double half = Math.max(0.04, style.coreHalf * (0.24 - strand * 0.018));
 
-            addTexturedQuad(entry, vertices,
-                    x + Math.cos(a0) * radius - half, yA, z + Math.sin(a0) * radius,
-                    x + Math.cos(a0) * radius + half, yA, z + Math.sin(a0) * radius,
-                    x + Math.cos(a1) * radius + half, yB, z + Math.sin(a1) * radius,
-                    x + Math.cos(a1) * radius - half, yB, z + Math.sin(a1) * radius,
-                    255, 74, 98, alpha);
+            for (int i = 0; i < segments; i++) {
+                double yA = y0 + i * heightStep + 0.08;
+                double yB = yA + heightStep * 0.62;
+                double a0 = spin + phase + i * 0.58;
+                double a1 = spin + phase + (i + 0.48) * 0.58;
+
+                drawThreadSegment(entry, vertices, camera,
+                        x + Math.cos(a0) * strandRadius,
+                        yA,
+                        z + Math.sin(a0) * strandRadius,
+                        x + Math.cos(a1) * strandRadius,
+                        yB,
+                        z + Math.sin(a1) * strandRadius,
+                        half,
+                        offset + strand * 0.012,
+                        255, 82, 105, alpha);
+            }
         }
+    }
+
+    private static float bodyVOffset(int scanAge, MarkerStyle style) {
+        return (scanAge * (0.018f + style.freshness * 0.018f)) % 1f;
+    }
+
+    private static float coreVOffset(int scanAge) {
+        return -((scanAge * 0.006f) % 1f);
     }
 
     private static float smooth(float value) {
@@ -635,16 +730,86 @@ public final class BloodSenseClient {
         }
     }
 
-    private static void drawPillarBillboards(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y0, double z, double half, double y1, int r, int g, int b, int a) {
-        addTexturedQuad(entry, vertices, x - half, y0, z, x + half, y0, z, x + half, y1, z, x - half, y1, z, r, g, b, a);
-        addTexturedQuad(entry, vertices, x, y0, z - half, x, y0, z + half, x, y1, z + half, x, y1, z - half, r, g, b, a);
+    private static void drawPillarBillboard(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double half, double y1, double forwardOffset, int r, int g, int b, int a) {
+        drawPillarBillboardUv(entry, vertices, camera, x, y0, z, half, y1, forwardOffset, 0f, r, g, b, a);
+    }
+
+    private static void drawPillarBillboardUv(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double half, double y1, double forwardOffset, float vOffset, int r, int g, int b, int a) {
+        double dx = camera.x - x;
+        double dz = camera.z - z;
+        double length = Math.sqrt(dx * dx + dz * dz);
+        double rightX = length > 0.0001 ? dz / length : 1.0;
+        double rightZ = length > 0.0001 ? -dx / length : 0.0;
+        double forwardX = length > 0.0001 ? dx / length : 0.0;
+        double forwardZ = length > 0.0001 ? dz / length : 1.0;
+        double px = x + forwardX * forwardOffset;
+        double pz = z + forwardZ * forwardOffset;
+
+        addTexturedQuadUv(entry, vertices,
+                px - rightX * half, y0, pz - rightZ * half,
+                px + rightX * half, y0, pz + rightZ * half,
+                px + rightX * half, y1, pz + rightZ * half,
+                px - rightX * half, y1, pz - rightZ * half,
+                0f, 1f + vOffset,
+                1f, 1f + vOffset,
+                1f, vOffset,
+                0f, vOffset,
+                r, g, b, a);
+    }
+
+    private static void drawTaperedPillarBillboard(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double bottomHalf, double topHalf, double y1, double forwardOffset, float vOffset, int r, int g, int b, int a) {
+        double dx = camera.x - x;
+        double dz = camera.z - z;
+        double length = Math.sqrt(dx * dx + dz * dz);
+        double rightX = length > 0.0001 ? dz / length : 1.0;
+        double rightZ = length > 0.0001 ? -dx / length : 0.0;
+        double forwardX = length > 0.0001 ? dx / length : 0.0;
+        double forwardZ = length > 0.0001 ? dz / length : 1.0;
+        double px = x + forwardX * forwardOffset;
+        double pz = z + forwardZ * forwardOffset;
+
+        addTexturedQuadUv(entry, vertices,
+                px - rightX * bottomHalf, y0, pz - rightZ * bottomHalf,
+                px + rightX * bottomHalf, y0, pz + rightZ * bottomHalf,
+                px + rightX * topHalf, y1, pz + rightZ * topHalf,
+                px - rightX * topHalf, y1, pz - rightZ * topHalf,
+                0f, 1f + vOffset,
+                1f, 1f + vOffset,
+                1f, vOffset,
+                0f, vOffset,
+                r, g, b, a);
+    }
+
+    private static void drawThreadSegment(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x0, double y0, double z0, double x1, double y1, double z1, double half, double forwardOffset, int r, int g, int b, int a) {
+        double mx = (x0 + x1) * 0.5;
+        double mz = (z0 + z1) * 0.5;
+        double dx = camera.x - mx;
+        double dz = camera.z - mz;
+        double length = Math.sqrt(dx * dx + dz * dz);
+        double rightX = length > 0.0001 ? dz / length : 1.0;
+        double rightZ = length > 0.0001 ? -dx / length : 0.0;
+        double forwardX = length > 0.0001 ? dx / length : 0.0;
+        double forwardZ = length > 0.0001 ? dz / length : 1.0;
+        double ox = forwardX * forwardOffset;
+        double oz = forwardZ * forwardOffset;
+
+        addTexturedQuad(entry, vertices,
+                x0 + ox - rightX * half, y0, z0 + oz - rightZ * half,
+                x0 + ox + rightX * half, y0, z0 + oz + rightZ * half,
+                x1 + ox + rightX * half, y1, z1 + oz + rightZ * half,
+                x1 + ox - rightX * half, y1, z1 + oz - rightZ * half,
+                r, g, b, a);
     }
 
     private static void addTexturedQuad(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, int r, int g, int b, int a) {
-        vertices.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a).texture(0f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
-        vertices.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).texture(1f, 1f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
-        vertices.vertex(entry, (float)x3, (float)y3, (float)z3).color(r, g, b, a).texture(1f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
-        vertices.vertex(entry, (float)x4, (float)y4, (float)z4).color(r, g, b, a).texture(0f, 0f).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        addTexturedQuadUv(entry, vertices, x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, 0f, 1f, 1f, 1f, 1f, 0f, 0f, 0f, r, g, b, a);
+    }
+
+    private static void addTexturedQuadUv(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, float u1, float v1, float u2, float v2, float u3, float v3, float u4, float v4, int r, int g, int b, int a) {
+        vertices.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a).texture(u1, v1).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).texture(u2, v2).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x3, (float)y3, (float)z3).color(r, g, b, a).texture(u3, v3).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x4, (float)y4, (float)z4).color(r, g, b, a).texture(u4, v4).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
     }
 
     private static final class ClientTrace {
@@ -653,6 +818,7 @@ public final class BloodSenseClient {
         private final int strength;
         private final int ageTicks;
         private float visibility;
+        private float distance;
 
         private ClientTrace(int type, BlockPos pos, int strength, int ageTicks) {
             this.type = type;
@@ -660,6 +826,7 @@ public final class BloodSenseClient {
             this.strength = strength;
             this.ageTicks = ageTicks;
             this.visibility = 0f;
+            this.distance = 0f;
         }
     }
 

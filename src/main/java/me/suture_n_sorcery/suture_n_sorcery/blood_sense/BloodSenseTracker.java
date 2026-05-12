@@ -44,6 +44,24 @@ public final class BloodSenseTracker {
         record(world, BloodSenseTraceType.RITUAL, pos, Math.max(35, strength));
     }
 
+    public static void recordDebug(ServerWorld world, BloodSenseTraceType type, BlockPos pos, int strength, int ageTicks) {
+        prune(world);
+
+        BloodSenseWorldState state = state(world);
+        state.traces().add(new BloodSenseWorldState.StoredTrace(
+                type.ordinal(),
+                pos.toImmutable(),
+                world.getTime() - Math.max(0, ageTicks),
+                Math.min(MAX_TRACE_STRENGTH, Math.max(1, strength))
+        ));
+
+        if (state.traces().size() > MAX_TRACES_PER_WORLD) {
+            state.traces().remove(0);
+        }
+
+        state.markDirty();
+    }
+
     public static List<BloodSenseTrace> recentTraces(ServerWorld world, BlockPos center, int radius) {
         prune(world);
 
