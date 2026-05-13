@@ -5,6 +5,8 @@ import net.minecraft.entity.ItemEntity;
 import net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.damage.DamageSource;
+import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.world.ServerWorld;
@@ -20,6 +22,7 @@ public final class BloodSenseTracker {
 
     private static final int TRACE_LIFETIME_TICKS = 20 * 60 * 12;
     private static final int CONTAINED_TRACE_LIFETIME_TICKS = 20 * 60 * 20;
+    private static final int SPENT_TRACE_LIFETIME_TICKS = 20 * 60 * 2;
     private static final int MAX_TRACES_PER_WORLD = 512;
     private static final int PRUNE_INTERVAL_TICKS = 20 * 30;
 
@@ -30,6 +33,8 @@ public final class BloodSenseTracker {
     private static final Map<UUID, Long> ACTIVE_BLOOD_SENSE = new HashMap<>();
     public static final int STATE_HIDDEN = 0;
     public static final int STATE_CONTAINED = 3;
+    public static final int STATE_DRAINED = 4;
+    public static final int STATE_MUTATED = 5;
 
     private BloodSenseTracker() {
     }
@@ -38,7 +43,7 @@ public final class BloodSenseTracker {
         ServerLivingEntityEvents.AFTER_DEATH.register((entity, damageSource) -> {
             if (entity.getEntityWorld() instanceof ServerWorld world) {
                 recordDeath(world, entity);
-                tryDropEchoAsh(world, entity);
+                tryDropEchoAsh(world, entity, damageSource);
             }
         });
 
@@ -96,7 +101,7 @@ public final class BloodSenseTracker {
 
         for (int i = 0; i < traces.size(); i++) {
             BloodSenseWorldState.StoredTrace trace = traces.get(i);
-            if (trace.state() == STATE_CONTAINED) continue;
+            if (trace.state() != STATE_HIDDEN) continue;
 
             long distance = (long) trace.pos().getSquaredDistance(center);
             if (distance <= radiusSquared && distance < bestDistance) {
@@ -117,6 +122,54 @@ public final class BloodSenseTracker {
         ));
         state.markDirty();
         return true;
+    }
+
+    public static BloodSenseTrace operateNearestContained(ServerWorld world, BlockPos center, int radius, int nextState) {
+        prune(world);
+
+        BloodSenseWorldState state = state(world);
+        List<BloodSenseWorldState.StoredTrace> traces = state.traces();
+        int bestIndex = -1;
+        long bestDistance = Long.MAX_VALUE;
+        long radiusSquared = (long) radius * radius;
+
+        for (int i = 0; i < traces.size(); i++) {
+            BloodSenseWorldState.StoredTrace trace = traces.get(i);
+            if (trace.state() != STATE_CONTAINED) continue;
+
+            long distance = (long) trace.pos().getSquaredDistance(center);
+            if (distance <= radiusSquared && distance < bestDistance) {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        if (bestIndex < 0) return null;
+
+        BloodSenseWorldState.StoredTrace trace = traces.get(bestIndex);
+        int spentStrength = nextState == STATE_MUTATED
+                ? Math.min(MAX_TRACE_STRENGTH, Math.max(1, trace.strength() + 30))
+                : Math.max(1, trace.strength() / 2);
+
+        // spent traces stay readable briefly so the player can see the operation resolve.
+        BloodSenseWorldState.StoredTrace updated = new BloodSenseWorldState.StoredTrace(
+                trace.type(),
+                trace.pos(),
+                world.getTime(),
+                spentStrength,
+                nextState
+        );
+        traces.set(bestIndex, updated);
+        state.markDirty();
+
+        return new BloodSenseTrace(
+                BloodSenseTraceType.byId(updated.type()),
+                world.getRegistryKey(),
+                updated.pos(),
+                updated.createdTime(),
+                updated.strength(),
+                updated.state()
+        );
     }
 
     public static List<BloodSenseTrace> recentTraces(ServerWorld world, BlockPos center, int radius) {
@@ -218,7 +271,11 @@ public final class BloodSenseTracker {
 
         long now = world.getTime();
         boolean removed = traces.removeIf(trace -> {
-            int lifetime = trace.state() == STATE_CONTAINED ? CONTAINED_TRACE_LIFETIME_TICKS : TRACE_LIFETIME_TICKS;
+            int lifetime = switch (trace.state()) {
+                case STATE_CONTAINED -> CONTAINED_TRACE_LIFETIME_TICKS;
+                case STATE_DRAINED, STATE_MUTATED -> SPENT_TRACE_LIFETIME_TICKS;
+                default -> TRACE_LIFETIME_TICKS;
+            };
             return now - trace.createdTime() >= lifetime;
         });
         ACTIVE_BLOOD_SENSE.entrySet().removeIf(entry -> entry.getValue() < now);
@@ -227,8 +284,8 @@ public final class BloodSenseTracker {
         }
     }
 
-    private static void tryDropEchoAsh(ServerWorld world, LivingEntity entity) {
-        if (entity instanceof PlayerEntity || (entity.getFireTicks() <= 0 && !entity.isOnFire())) return;
+    private static void tryDropEchoAsh(ServerWorld world, LivingEntity entity, DamageSource source) {
+        if (entity instanceof PlayerEntity || !isFireDeath(entity, source)) return;
 
         long now = world.getTime();
         long radiusSquared = (long)ECHO_ASH_RADIUS * ECHO_ASH_RADIUS;
@@ -247,6 +304,16 @@ public final class BloodSenseTracker {
                 new ItemStack(BloodSenseTools.ECHO_ASH)
         );
         world.spawnEntity(drop);
+    }
+
+    private static boolean isFireDeath(LivingEntity entity, DamageSource source) {
+        return entity.getFireTicks() > 0
+                || entity.isOnFire()
+                || source.isOf(DamageTypes.IN_FIRE)
+                || source.isOf(DamageTypes.ON_FIRE)
+                || source.isOf(DamageTypes.LAVA)
+                || source.isOf(DamageTypes.CAMPFIRE)
+                || source.isOf(DamageTypes.HOT_FLOOR);
     }
 
     private static BloodSenseWorldState state(ServerWorld world) {

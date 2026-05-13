@@ -3,6 +3,7 @@ package me.suture_n_sorcery.suture_n_sorcery.client.blood_sense;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
+import me.suture_n_sorcery.suture_n_sorcery.client.gui_text.BloodGuiText;
 import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
@@ -12,6 +13,7 @@ import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -95,6 +97,7 @@ public final class BloodSenseClient {
         });
 
         WorldRenderEvents.END_MAIN.register(BloodSenseClient::renderWorldSense);
+        HudRenderCallback.EVENT.register((context, tickCounter) -> renderBloodReadings(context));
 
         ClientPlayNetworking.registerGlobalReceiver(BloodSenseResponsePayload.ID, (payload, context) ->
                 context.client().execute(() -> activate(payload.traces()))
@@ -139,6 +142,58 @@ public final class BloodSenseClient {
         context.fill(x - 2, y - 2, x + 18, y + 18, frame);
         context.fill(x - 1, y - 1, x + 17, y + 17, fill);
         context.drawItem(CATALYST_PLACEHOLDER, x, y);
+    }
+
+    private static void renderBloodReadings(DrawContext context) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (!isActive() || client.player == null || visibleTraces.isEmpty()) return;
+
+        ClientTrace trace = nearestReadableTrace();
+        if (trace == null) return;
+
+        float tickProgress = client.getRenderTickCounter().getTickProgress(false);
+        int ageTicks = trace.ageTicks + (int)animatedAge(tickProgress);
+        float intensity = MathHelper.clamp(trace.visibility * activeAmount(), 0.15f, 1f);
+        List<BloodGuiText.ReadingLine> lines = new ArrayList<>();
+        lines.add(new BloodGuiText.ReadingLine(readingName(trace, ageTicks), intensity));
+        lines.add(new BloodGuiText.ReadingLine("intensity " + Math.round(traceVisualMass(trace.strength) * 100f) + "%", intensity * 0.82f));
+
+        String state = readingState(trace.state);
+        if (!state.isEmpty()) {
+            lines.add(new BloodGuiText.ReadingLine(state, intensity * 0.9f));
+        }
+
+        BloodGuiText.drawReadingPanel(context, client.textRenderer, 14, 14, lines, intensity);
+    }
+
+    private static ClientTrace nearestReadableTrace() {
+        ClientTrace nearest = null;
+        float bestDistance = Float.MAX_VALUE;
+
+        for (ClientTrace trace : visibleTraces) {
+            if (trace.visibility <= 0.08f) continue;
+            if (trace.distance < bestDistance) {
+                nearest = trace;
+                bestDistance = trace.distance;
+            }
+        }
+
+        return nearest;
+    }
+
+    private static String readingName(ClientTrace trace, int ageTicks) {
+        boolean fresh = ageTicks < 20 * 60;
+        if (trace.type == 1) return fresh ? "fresh ritual blood" : "ritual residue";
+        return fresh ? "death residue" : "old death blood";
+    }
+
+    private static String readingState(int state) {
+        return switch (state) {
+            case 3 -> "contained";
+            case 4 -> "drained";
+            case 5 -> "mutated";
+            default -> "";
+        };
     }
 
     private static void activate(List<BloodSenseResponsePayload.Trace> traces) {
@@ -584,9 +639,12 @@ public final class BloodSenseClient {
         double coreHalf = MathHelper.clamp((float)(height * PILLAR_CORE_TEXTURE_ASPECT * 0.16), distant ? 0.035f : 0.055f, distant ? 0.10f : 0.36f);
 
         boolean contained = trace.state == 3;
-        int baseAlpha = Math.clamp((int)((ritual ? 150 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f) * (contained ? 1.18f : 1f)), 34, distant ? 130 : 235);
-        int coreAlpha = Math.clamp((int)((ritual ? 215 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f) * (contained ? 1.22f : 1f)), distant ? 30 : 58, distant ? 145 : 255);
-        float pulseSpeed = contained ? 0.24f : ritual ? 0.19f : MathHelper.lerp(freshness, 0.045f, 0.135f);
+        boolean drained = trace.state == 4;
+        boolean mutated = trace.state == 5;
+        float stateAlpha = contained ? 1.18f : drained ? 0.42f : mutated ? 0.78f : 1f;
+        int baseAlpha = Math.clamp((int)((ritual ? 150 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f) * stateAlpha), 34, distant ? 130 : 235);
+        int coreAlpha = Math.clamp((int)((ritual ? 215 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f) * stateAlpha), distant ? 30 : 58, distant ? 145 : 255);
+        float pulseSpeed = drained ? 0.035f : contained ? 0.24f : mutated ? 0.28f : ritual ? 0.19f : MathHelper.lerp(freshness, 0.045f, 0.135f);
 
         return new MarkerStyle(
                 r, g, b,
