@@ -1,7 +1,6 @@
 package me.suture_n_sorcery.suture_n_sorcery.network;
 
 import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTrace;
-import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTraceType;
 import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTracker;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomBlockEntity;
 import me.suture_n_sorcery.suture_n_sorcery.blocks.RitualLoom.RitualLoomScreenHandler;
@@ -110,9 +109,8 @@ public final class ModNetworking {
 
     private static BloodSenseResponsePayload.Trace toPayloadTrace(BloodSenseTrace trace, long now) {
         BlockPos pos = trace.pos();
-        int type = trace.type() == BloodSenseTraceType.RITUAL ? 1 : 0;
         return new BloodSenseResponsePayload.Trace(
-                type,
+                trace.type().ordinal(),
                 pos.getX(),
                 pos.getY(),
                 pos.getZ(),

@@ -9,6 +9,7 @@ import net.minecraft.entity.damage.DamageSource;
 import net.minecraft.entity.damage.DamageTypes;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.tag.EntityTypeTags;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 
@@ -30,6 +31,7 @@ public final class BloodSenseTracker {
     private static final int MAX_TRACE_STRENGTH = 1800;
     private static final int ACTIVE_SENSE_GRACE_TICKS = 20 * 8;
     private static final int ECHO_ASH_RADIUS = 16;
+    private static final float ECHO_ASH_DROP_CHANCE = 0.45f;
     private static final Map<UUID, Long> ACTIVE_BLOOD_SENSE = new HashMap<>();
     public static final int STATE_HIDDEN = 0;
     public static final int STATE_CONTAINED = 3;
@@ -56,7 +58,7 @@ public final class BloodSenseTracker {
 
     public static void recordDeath(ServerWorld world, LivingEntity entity) {
         int strength = 28 + Math.round(entity.getMaxHealth() * 2.5f);
-        record(world, BloodSenseTraceType.DEATH, entity.getBlockPos(), strength);
+        record(world, deathTraceType(entity), entity.getBlockPos(), strength);
     }
 
     public static void recordRitual(ServerWorld world, BlockPos pos, int strength) {
@@ -122,6 +124,43 @@ public final class BloodSenseTracker {
         ));
         state.markDirty();
         return true;
+    }
+
+    public static ContainmentResult containLoop(ServerWorld world, PlayerEntity player, List<BlockPos> points) {
+        prune(world);
+
+        if (points.size() < 6 || !isClosed(points)) return ContainmentResult.OPEN;
+
+        double area = Math.abs(loopArea(points));
+        if (area < 1.5) return ContainmentResult.TOO_SMALL;
+        if (area > 80.0) return ContainmentResult.TOO_LARGE;
+
+        BloodSenseWorldState state = state(world);
+        List<BloodSenseWorldState.StoredTrace> traces = state.traces();
+        int containedIndex = -1;
+
+        for (int i = 0; i < traces.size(); i++) {
+            BloodSenseWorldState.StoredTrace trace = traces.get(i);
+            if (trace.state() != STATE_HIDDEN) continue;
+            if (!pointInsideLoop(trace.pos(), points)) continue;
+            if (player.squaredDistanceTo(trace.pos().toCenterPos()) > 100.0) return ContainmentResult.TOO_FAR;
+            if (containedIndex >= 0) return ContainmentResult.MULTIPLE;
+
+            containedIndex = i;
+        }
+
+        if (containedIndex < 0) return ContainmentResult.NONE;
+
+        BloodSenseWorldState.StoredTrace trace = traces.get(containedIndex);
+        traces.set(containedIndex, new BloodSenseWorldState.StoredTrace(
+                trace.type(),
+                trace.pos(),
+                world.getTime(),
+                trace.strength(),
+                STATE_CONTAINED
+        ));
+        state.markDirty();
+        return ContainmentResult.CONTAINED;
     }
 
     public static BloodSenseTrace operateNearestContained(ServerWorld world, BlockPos center, int radius, int nextState) {
@@ -236,6 +275,12 @@ public final class BloodSenseTracker {
         state.markDirty();
     }
 
+    private static BloodSenseTraceType deathTraceType(LivingEntity entity) {
+        if (entity.getType().isIn(EntityTypeTags.UNDEAD)) return BloodSenseTraceType.ROT;
+        if (entity.getBlockY() <= 0) return BloodSenseTraceType.DEEP;
+        return BloodSenseTraceType.DEATH;
+    }
+
     private static int findMergeTarget(List<BloodSenseWorldState.StoredTrace> traces, BloodSenseTraceType type, BlockPos pos) {
         int bestIndex = -1;
         long bestDistance = Long.MAX_VALUE;
@@ -263,6 +308,46 @@ public final class BloodSenseTracker {
         int z = Math.round((a.getZ() * aStrength + b.getZ() * bStrength) / (float) total);
 
         return new BlockPos(x, y, z);
+    }
+
+    private static boolean isClosed(List<BlockPos> points) {
+        BlockPos first = points.getFirst();
+        BlockPos last = points.getLast();
+        double dx = first.getX() - last.getX();
+        double dz = first.getZ() - last.getZ();
+        return dx * dx + dz * dz <= 2.25;
+    }
+
+    private static double loopArea(List<BlockPos> points) {
+        double sum = 0.0;
+        for (int i = 0; i < points.size(); i++) {
+            BlockPos a = points.get(i);
+            BlockPos b = points.get((i + 1) % points.size());
+            sum += a.getX() * b.getZ() - b.getX() * a.getZ();
+        }
+        return sum * 0.5;
+    }
+
+    private static boolean pointInsideLoop(BlockPos point, List<BlockPos> loop) {
+        double x = point.getX() + 0.5;
+        double z = point.getZ() + 0.5;
+        boolean inside = false;
+
+        for (int i = 0, j = loop.size() - 1; i < loop.size(); j = i++) {
+            BlockPos a = loop.get(i);
+            BlockPos b = loop.get(j);
+            double zi = a.getZ() + 0.5;
+            double zj = b.getZ() + 0.5;
+            double xi = a.getX() + 0.5;
+            double xj = b.getX() + 0.5;
+
+            boolean crosses = (zi > z) != (zj > z);
+            if (crosses && x < (xj - xi) * (z - zi) / (zj - zi) + xi) {
+                inside = !inside;
+            }
+        }
+
+        return inside;
     }
 
     private static void prune(ServerWorld world) {
@@ -295,6 +380,7 @@ public final class BloodSenseTracker {
         ).size() > 0;
 
         if (!witnessed) return;
+        if (world.random.nextFloat() > ECHO_ASH_DROP_CHANCE) return;
 
         ItemEntity drop = new ItemEntity(
                 world,
@@ -318,5 +404,15 @@ public final class BloodSenseTracker {
 
     private static BloodSenseWorldState state(ServerWorld world) {
         return world.getPersistentStateManager().getOrCreate(BloodSenseWorldState.TYPE);
+    }
+
+    public enum ContainmentResult {
+        CONTAINED,
+        OPEN,
+        TOO_SMALL,
+        TOO_LARGE,
+        MULTIPLE,
+        NONE,
+        TOO_FAR
     }
 }

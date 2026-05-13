@@ -55,6 +55,8 @@ public final class ModDebugCommands {
                                         .suggests((context, builder) -> {
                                             builder.suggest("death");
                                             builder.suggest("ritual");
+                                            builder.suggest("rot");
+                                            builder.suggest("deep");
                                             return builder.buildFuture();
                                         })
                                         .then(argument("strength", IntegerArgumentType.integer(1, 1800))
@@ -119,11 +121,13 @@ public final class ModDebugCommands {
         ServerWorld world = source.getWorld();
         BloodSenseTraceType type = switch (typeName) {
             case "ritual" -> BloodSenseTraceType.RITUAL;
+            case "rot" -> BloodSenseTraceType.ROT;
+            case "deep" -> BloodSenseTraceType.DEEP;
             case "death" -> BloodSenseTraceType.DEATH;
             default -> null;
         };
         if (type == null) {
-            source.sendError(Text.literal("type must be death or ritual"));
+            source.sendError(Text.literal("type must be death, ritual, rot, or deep"));
             return 0;
         }
 

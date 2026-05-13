@@ -2,9 +2,12 @@ package me.suture_n_sorcery.suture_n_sorcery.blood_sense;
 
 public enum BloodSenseTraceType {
     DEATH,
-    RITUAL;
+    RITUAL,
+    ROT,
+    DEEP;
 
     public static BloodSenseTraceType byId(int id) {
-        return id == RITUAL.ordinal() ? RITUAL : DEATH;
+        if (id < 0 || id >= values().length) return DEATH;
+        return values()[id];
     }
 }

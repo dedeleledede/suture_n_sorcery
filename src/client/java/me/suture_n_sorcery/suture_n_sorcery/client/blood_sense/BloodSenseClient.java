@@ -53,6 +53,8 @@ public final class BloodSenseClient {
     private static final float MAX_RADIUS = 16f;
     private static final float TRACE_EDGE_FADE_BLOCKS = 2.4f;
     private static final float DETAILED_MARKER_DISTANCE = 11f;
+    private static final float READING_TARGET_RADIUS = 0.92f;
+    private static final float READING_TARGET_RANGE = 18f;
     private static final float SPHERE_TEXTURE_TILES = 6f;
     private static final float INNER_SPHERE_SCALE = 0.36f;
     private static final float PILLAR_BODY_TEXTURE_ASPECT = 24f / 64f;
@@ -148,7 +150,7 @@ public final class BloodSenseClient {
         MinecraftClient client = MinecraftClient.getInstance();
         if (!isActive() || client.player == null || visibleTraces.isEmpty()) return;
 
-        ClientTrace trace = nearestReadableTrace();
+        ClientTrace trace = targetedReadableTrace(client);
         if (trace == null) return;
 
         float tickProgress = client.getRenderTickCounter().getTickProgress(false);
@@ -163,28 +165,48 @@ public final class BloodSenseClient {
             lines.add(new BloodGuiText.ReadingLine(state, intensity * 0.9f));
         }
 
-        BloodGuiText.drawReadingPanel(context, client.textRenderer, 14, 14, lines, intensity);
+        int x = client.getWindow().getScaledWidth() / 2 + 10;
+        int y = client.getWindow().getScaledHeight() / 2 + 14;
+        BloodGuiText.drawReadingPanel(context, client.textRenderer, x, y, lines, intensity);
     }
 
-    private static ClientTrace nearestReadableTrace() {
-        ClientTrace nearest = null;
-        float bestDistance = Float.MAX_VALUE;
+    private static ClientTrace targetedReadableTrace(MinecraftClient client) {
+        Vec3d camera = client.gameRenderer.getCamera().getPos();
+        Vec3d look = Vec3d.fromPolar(client.gameRenderer.getCamera().getPitch(), client.gameRenderer.getCamera().getYaw()).normalize();
+        ClientTrace target = null;
+        double bestAlongRay = Double.MAX_VALUE;
 
         for (ClientTrace trace : visibleTraces) {
             if (trace.visibility <= 0.08f) continue;
-            if (trace.distance < bestDistance) {
-                nearest = trace;
-                bestDistance = trace.distance;
+
+            Vec3d traceCenter = Vec3d.ofCenter(trace.pos).add(0.0, markerReadingHeight(trace), 0.0);
+            Vec3d toTrace = traceCenter.subtract(camera);
+            double alongRay = toTrace.dotProduct(look);
+            if (alongRay < 0.5 || alongRay > READING_TARGET_RANGE || alongRay >= bestAlongRay) continue;
+
+            double missDistance = toTrace.subtract(look.multiply(alongRay)).length();
+            if (missDistance <= READING_TARGET_RADIUS) {
+                target = trace;
+                bestAlongRay = alongRay;
             }
         }
 
-        return nearest;
+        return target;
+    }
+
+    private static double markerReadingHeight(ClientTrace trace) {
+        float mass = traceVisualMass(trace.strength);
+        return MathHelper.clamp(1.0f + mass * 2.6f, 1.0f, 3.4f);
     }
 
     private static String readingName(ClientTrace trace, int ageTicks) {
         boolean fresh = ageTicks < 20 * 60;
-        if (trace.type == 1) return fresh ? "fresh ritual blood" : "ritual residue";
-        return fresh ? "death residue" : "old death blood";
+        return switch (trace.type) {
+            case 1 -> fresh ? "fresh ritual blood" : "ritual residue";
+            case 2 -> fresh ? "fresh rot blood" : "rot residue";
+            case 3 -> fresh ? "deep blood pressure" : "deep blood residue";
+            default -> fresh ? "death residue" : "old death blood";
+        };
     }
 
     private static String readingState(int state) {
@@ -604,7 +626,7 @@ public final class BloodSenseClient {
             if (trace.visibility <= 0.01f) continue;
 
             MarkerStyle style = markerStyle(trace, strength, scanAge);
-            if (!style.distant && trace.type == 1) {
+            if (!style.distant && (trace.type == 1 || trace.type == 2)) {
                 double x = trace.pos.getX() + 0.5;
                 double y0 = trace.pos.getY() + 0.06;
                 double z = trace.pos.getZ() + 0.5;
@@ -627,13 +649,15 @@ public final class BloodSenseClient {
         float age = MathHelper.clamp((trace.ageTicks + scanAge) / (float)TRACE_LIFETIME_TICKS, 0f, 1f);
         float freshness = 1f - age;
         boolean ritual = trace.type == 1;
+        boolean rot = trace.type == 2;
+        boolean deep = trace.type == 3;
         boolean distant = distance > DETAILED_MARKER_DISTANCE;
         float traceStrength = MathHelper.clamp((0.25f + mass * 0.75f) * strength * trace.visibility, 0f, 1.7f);
 
-        int r = ritual ? 255 : Math.round(MathHelper.lerp(freshness, 128f, 235f));
-        int g = ritual ? 42 : Math.round(MathHelper.lerp(freshness, 6f, 26f));
-        int b = ritual ? 92 : Math.round(MathHelper.lerp(freshness, 18f, 44f));
-        double height = (ritual ? 3.6 : 1.8) + mass * (ritual ? 5.4 : 4.8);
+        int r = ritual ? 255 : rot ? 116 : deep ? 210 : Math.round(MathHelper.lerp(freshness, 128f, 235f));
+        int g = ritual ? 42 : rot ? 20 : deep ? 18 : Math.round(MathHelper.lerp(freshness, 6f, 26f));
+        int b = ritual ? 92 : rot ? 36 : deep ? 118 : Math.round(MathHelper.lerp(freshness, 18f, 44f));
+        double height = (ritual ? 3.6 : deep ? 3.2 : rot ? 2.4 : 1.8) + mass * (ritual ? 5.4 : deep ? 5.8 : rot ? 4.2 : 4.8);
         height *= MathHelper.lerp(age, 1.0f, 0.62f);
         double bodyHalf = MathHelper.clamp((float)(height * PILLAR_BODY_TEXTURE_ASPECT * 0.26), distant ? 0.055f : 0.12f, distant ? 0.18f : 0.78f);
         double coreHalf = MathHelper.clamp((float)(height * PILLAR_CORE_TEXTURE_ASPECT * 0.16), distant ? 0.035f : 0.055f, distant ? 0.10f : 0.36f);
@@ -642,9 +666,9 @@ public final class BloodSenseClient {
         boolean drained = trace.state == 4;
         boolean mutated = trace.state == 5;
         float stateAlpha = contained ? 1.18f : drained ? 0.42f : mutated ? 0.78f : 1f;
-        int baseAlpha = Math.clamp((int)((ritual ? 150 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f) * stateAlpha), 34, distant ? 130 : 235);
-        int coreAlpha = Math.clamp((int)((ritual ? 215 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f) * stateAlpha), distant ? 30 : 58, distant ? 145 : 255);
-        float pulseSpeed = drained ? 0.035f : contained ? 0.24f : mutated ? 0.28f : ritual ? 0.19f : MathHelper.lerp(freshness, 0.045f, 0.135f);
+        int baseAlpha = Math.clamp((int)((ritual ? 150 : deep ? 145 : rot ? 118 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f) * stateAlpha), 34, distant ? 130 : 235);
+        int coreAlpha = Math.clamp((int)((ritual ? 215 : deep ? 205 : rot ? 155 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f) * stateAlpha), distant ? 30 : 58, distant ? 145 : 255);
+        float pulseSpeed = drained ? 0.035f : contained ? 0.24f : mutated ? 0.28f : ritual ? 0.19f : deep ? 0.085f : rot ? 0.055f : MathHelper.lerp(freshness, 0.045f, 0.135f);
 
         return new MarkerStyle(
                 r, g, b,
