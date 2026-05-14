@@ -1,6 +1,7 @@
 package me.suture_n_sorcery.suture_n_sorcery.items;
 
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
+import net.minecraft.component.DataComponentTypes;
 import net.minecraft.item.Item;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
@@ -14,6 +15,7 @@ public final class BloodSenseTools {
     public static final RegistryKey<Item> VEINMAKER_KEY = RegistryKey.of(RegistryKeys.ITEM, VEINMAKER_ID);
     public static final Item VEINMAKER = new Veinmaker(new Item.Settings()
             .registryKey(VEINMAKER_KEY)
+            .component(DataComponentTypes.ITEM_MODEL, Identifier.of(Suture_n_sorcery.MOD_ID, "veinmaker_empty"))
             .maxCount(1)
     );
 

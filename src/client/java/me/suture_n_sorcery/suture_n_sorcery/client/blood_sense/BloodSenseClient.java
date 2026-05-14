@@ -8,6 +8,7 @@ import me.suture_n_sorcery.suture_n_sorcery.items.HematicCatalyst;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseRequestPayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.BloodSenseResponsePayload;
 import me.suture_n_sorcery.suture_n_sorcery.network.HematicBondPayload;
+import me.suture_n_sorcery.suture_n_sorcery.network.VeinmakerTrailPayload;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModParticles;
 import me.suture_n_sorcery.suture_n_sorcery.render.ModShader;
 import me.suture_n_sorcery.suture_n_sorcery.util.HematicBondHolder;
@@ -34,6 +35,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.BlockView;
@@ -45,16 +47,18 @@ import java.util.List;
 
 public final class BloodSenseClient {
 
-    private static final int DURATION_TICKS = 20 * 6;
+    private static final int DURATION_TICKS = 20 * 12;
     private static final int PULSE_TICKS = 38;
     private static final int FADE_OUT_TICKS = 36;
     private static final int TRACE_LIFETIME_TICKS = 20 * 60 * 12;
     private static final int TRACE_EXPIRY_FADE_TICKS = 20 * 30;
+    private static final int UNCONTAINED_TRAIL_LIFETIME_TICKS = 20 * 15;
     private static final float MAX_RADIUS = 16f;
     private static final float TRACE_EDGE_FADE_BLOCKS = 2.4f;
     private static final float DETAILED_MARKER_DISTANCE = 11f;
     private static final float READING_TARGET_RADIUS = 0.92f;
     private static final float READING_TARGET_RANGE = 18f;
+    private static final double TYPE_READING_RANGE_SQUARED = 25.0;
     private static final float SPHERE_TEXTURE_TILES = 6f;
     private static final float INNER_SPHERE_SCALE = 0.36f;
     private static final float PILLAR_BODY_TEXTURE_ASPECT = 24f / 64f;
@@ -63,8 +67,9 @@ public final class BloodSenseClient {
     private static final Identifier SPHERE_TEXTURE_INNER = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_sphere_inner.png");
     private static final Identifier PILLAR_BODY_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar_body.png");
     private static final Identifier PILLAR_CORE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar_core.png");
-    private static final Identifier PILLAR_PULSE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar_core.png");
+    private static final Identifier PILLAR_PULSE_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_pillar_pulse.png");
     private static final Identifier GROUND_WOUND_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_ground_wound.png");
+    private static final Identifier SANGUINE_FIXATIVE_TRAIL_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/sanguine_fixative_trail.png");
     private static final Identifier RITUAL_THREAD_TEXTURE = Identifier.of(Suture_n_sorcery.MOD_ID, "textures/effect/blood_sense_thread.png");
     private static final ItemStack CATALYST_PLACEHOLDER = new ItemStack(HematicCatalyst.HEMATIC_CATALYST);
     private static final RenderPhase.TextureBase FRAMEBUFFER_TEXTURE = new RenderPhase.TextureBase(
@@ -76,8 +81,10 @@ public final class BloodSenseClient {
 
     private static int remainingTicks = 0;
     private static int fadeOutTicks = 0;
+    private static int markerAnimationTicks = 0;
     private static float pulseJitter = 0.5f;
     private static final List<ClientTrace> visibleTraces = new ArrayList<>();
+    private static final List<PaintedCell> paintedCells = new ArrayList<>();
 
     private BloodSenseClient() {
     }
@@ -93,19 +100,26 @@ public final class BloodSenseClient {
                 fadeOutTicks--;
             }
             if (!client.isPaused()) {
+                markerAnimationTicks++;
                 spawnPillarParticles(client);
+                paintedCells.removeIf(cell -> --cell.life <= 0 || !hasOpenPaintedSurface(cell.pos, Direction.values()[Math.floorMod(cell.side, Direction.values().length)]));
             }
-            if (remainingTicks <= 0 && fadeOutTicks <= 0) visibleTraces.clear();
+            if (remainingTicks <= 0 && fadeOutTicks <= 0) {
+                visibleTraces.removeIf(trace -> trace.state != 3);
+            }
         });
 
         WorldRenderEvents.END_MAIN.register(BloodSenseClient::renderWorldSense);
         HudRenderCallback.EVENT.register((context, tickCounter) -> renderBloodReadings(context));
 
         ClientPlayNetworking.registerGlobalReceiver(BloodSenseResponsePayload.ID, (payload, context) ->
-                context.client().execute(() -> activate(payload.traces()))
+                context.client().execute(() -> handleBloodSenseResponse(payload))
         );
         ClientPlayNetworking.registerGlobalReceiver(HematicBondPayload.ID, (payload, context) ->
                 context.client().execute(() -> syncHematicBond(context.client(), payload.absorbed()))
+        );
+        ClientPlayNetworking.registerGlobalReceiver(VeinmakerTrailPayload.ID, (payload, context) ->
+                context.client().execute(() -> applyPaintedCells(payload))
         );
 
         ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -178,20 +192,45 @@ public final class BloodSenseClient {
 
         for (ClientTrace trace : visibleTraces) {
             if (trace.visibility <= 0.08f) continue;
+            if (client.player.squaredDistanceTo(trace.pos.toCenterPos()) > TYPE_READING_RANGE_SQUARED) continue;
 
-            Vec3d traceCenter = Vec3d.ofCenter(trace.pos).add(0.0, markerReadingHeight(trace), 0.0);
-            Vec3d toTrace = traceCenter.subtract(camera);
-            double alongRay = toTrace.dotProduct(look);
+            double alongRay = rayPillarIntersection(camera, look, trace);
             if (alongRay < 0.5 || alongRay > READING_TARGET_RANGE || alongRay >= bestAlongRay) continue;
 
-            double missDistance = toTrace.subtract(look.multiply(alongRay)).length();
-            if (missDistance <= READING_TARGET_RADIUS) {
-                target = trace;
-                bestAlongRay = alongRay;
-            }
+            target = trace;
+            bestAlongRay = alongRay;
         }
 
         return target;
+    }
+
+    private static double rayPillarIntersection(Vec3d origin, Vec3d direction, ClientTrace trace) {
+        float mass = traceVisualMass(trace.strength);
+        double height = MathHelper.clamp(1.9f + mass * 5.7f, 2.0f, 7.6f);
+        double radius = MathHelper.clamp(0.34f + mass * 0.44f, 0.36f, 0.9f);
+        double cx = trace.pos.getX() + 0.5;
+        double cz = trace.pos.getZ() + 0.5;
+        double minY = trace.pos.getY() - 0.1;
+        double maxY = trace.pos.getY() + height;
+
+        double ox = origin.x - cx;
+        double oz = origin.z - cz;
+        double a = direction.x * direction.x + direction.z * direction.z;
+        if (a < 0.00001) return Double.MAX_VALUE;
+
+        double b = 2.0 * (ox * direction.x + oz * direction.z);
+        double c = ox * ox + oz * oz - radius * radius;
+        double discriminant = b * b - 4.0 * a * c;
+        if (discriminant < 0.0) return Double.MAX_VALUE;
+
+        double root = Math.sqrt(discriminant);
+        double t0 = (-b - root) / (2.0 * a);
+        double t1 = (-b + root) / (2.0 * a);
+        double t = t0 > 0.0 ? t0 : t1;
+        if (t <= 0.0) return Double.MAX_VALUE;
+
+        double y = origin.y + direction.y * t;
+        return y >= minY && y <= maxY ? t : Double.MAX_VALUE;
     }
 
     private static double markerReadingHeight(ClientTrace trace) {
@@ -218,7 +257,16 @@ public final class BloodSenseClient {
         };
     }
 
-    private static void activate(List<BloodSenseResponsePayload.Trace> traces) {
+    private static void handleBloodSenseResponse(BloodSenseResponsePayload payload) {
+        setVisibleTraces(payload.traces());
+        if (payload.refreshOnly()) return;
+
+        remainingTicks = DURATION_TICKS;
+        fadeOutTicks = 0;
+        pulseJitter = (System.nanoTime() & 1023L) / 1023f;
+    }
+
+    private static void setVisibleTraces(List<BloodSenseResponsePayload.Trace> traces) {
         visibleTraces.clear();
         for (BloodSenseResponsePayload.Trace trace : traces) {
             visibleTraces.add(new ClientTrace(
@@ -229,9 +277,32 @@ public final class BloodSenseClient {
                     trace.state()
             ));
         }
-        remainingTicks = DURATION_TICKS;
-        fadeOutTicks = 0;
-        pulseJitter = (System.nanoTime() & 1023L) / 1023f;
+    }
+
+    private static void applyPaintedCells(VeinmakerTrailPayload payload) {
+        if (payload.replace()) {
+            paintedCells.clear();
+        }
+
+        for (VeinmakerTrailPayload.Cell cell : payload.cells()) {
+            int lifetime = cell.contained() ? payload.lifetimeTicks() : UNCONTAINED_TRAIL_LIFETIME_TICKS;
+            int life = Math.max(1, lifetime - cell.ageTicks());
+            upsertPaintedCell(new PaintedCell(cell.pos(), cell.side(), cell.pixelX(), cell.pixelY(), life));
+        }
+
+        if (paintedCells.size() > 8192) {
+            paintedCells.subList(0, paintedCells.size() - 8192).clear();
+        }
+    }
+
+    private static void upsertPaintedCell(PaintedCell next) {
+        for (int i = 0; i < paintedCells.size(); i++) {
+            if (paintedCells.get(i).samePixel(next)) {
+                paintedCells.set(i, next);
+                return;
+            }
+        }
+        paintedCells.add(next);
     }
 
     private static void syncHematicBond(MinecraftClient client, boolean absorbed) {
@@ -242,30 +313,30 @@ public final class BloodSenseClient {
 
     private static void renderWorldSense(WorldRenderContext context) {
         MinecraftClient client = MinecraftClient.getInstance();
-        if (!isActive() || client.world == null || client.player == null) return;
+        if (client.world == null || client.player == null) return;
 
         float tickProgress = client.getRenderTickCounter().getTickProgress(false);
+        renderVeinmakerLines(context, client);
+        boolean active = isActive();
+        if (!active && visibleTraces.stream().noneMatch(trace -> trace.state == 3)) return;
+
         float age = animatedAge(tickProgress);
-        float open = openingAmount(age);
-        float fade = fadeAmount(tickProgress);
-        float strength = open * fade;
-        float radius = MAX_RADIUS * open * fade;
+        float open = active ? openingAmount(age) : 1f;
+        float fade = active ? fadeAmount(tickProgress) : 1f;
+        float strength = active ? open * fade : 0.68f;
+        float radius = active ? MAX_RADIUS * open * fade : MAX_RADIUS;
 
         MatrixStack matrices = context.matrices();
         Vec3d camera = client.gameRenderer.getCamera().getPos();
         Vec3d center = client.player.getLerpedPos(tickProgress).add(0.0, 1.0, 0.0);
-        drawScreenRefraction(client, center, radius, strength);
+        if (active) {
+            drawScreenRefraction(client, center, radius, strength);
+        }
 
         matrices.push();
         matrices.translate(-camera.x, -camera.y, -camera.z);
 
         MatrixStack.Entry entry = matrices.peek();
-
-        RenderLayer outerSphereLayer = RenderLayer.getEnergySwirl(
-                SPHERE_TEXTURE,
-                age * 0.012f,
-                age * 0.004f
-        );
 
         RenderLayer innerSphereLayer = RenderLayer.getEntityTranslucent(SPHERE_TEXTURE_INNER);
         RenderLayer pillarBodyLayer = RenderLayer.getEntityTranslucent(PILLAR_BODY_TEXTURE);
@@ -274,25 +345,53 @@ public final class BloodSenseClient {
         RenderLayer groundWoundLayer = RenderLayer.getEntityTranslucent(GROUND_WOUND_TEXTURE);
         RenderLayer ritualThreadLayer = RenderLayer.getEntityTranslucent(RITUAL_THREAD_TEXTURE);
         RenderLayer sphereRefractionLayer = bloodSenseSphereRefractionLayer();
-        updateTraceMarkers(client.player, radius, (int)age);
+        int markerAge = markerAnimationTicks + (int)tickProgress;
+        updateTraceMarkers(client.player, radius, active ? (int)age : markerAge);
 
-        drawLayer(sphereRefractionLayer, vertices ->
-                drawRefractionSphere(entry, vertices, center, radius, strength)
-        );
+        if (active) {
+            RenderLayer outerSphereLayer = RenderLayer.getEnergySwirl(
+                    SPHERE_TEXTURE,
+                    age * 0.012f,
+                    age * 0.004f
+            );
 
-        drawLayer(innerSphereLayer, vertices ->
-                drawInnerSphere(entry, vertices, center, radius, strength, age)
-        );
+            drawLayer(sphereRefractionLayer, vertices ->
+                    drawRefractionSphere(entry, vertices, center, radius, strength)
+            );
 
-        drawLayer(outerSphereLayer, vertices ->
-                drawShaderSphere(entry, vertices, client.world, center, radius, strength)
-        );
+            drawLayer(innerSphereLayer, vertices ->
+                    drawInnerSphere(entry, vertices, center, radius, strength, age)
+            );
 
-        drawLayer(groundWoundLayer, vertices -> drawGroundWounds(entry, vertices, client.world, strength, (int)age));
-        drawLayer(pillarBodyLayer, vertices -> drawMarkerBodies(entry, vertices, camera, strength, (int)age));
-        drawLayer(pillarCoreLayer, vertices -> drawMarkerCores(entry, vertices, camera, strength, (int)age));
-        drawLayer(pillarPulseLayer, vertices -> drawMarkerPulses(entry, vertices, camera, strength, (int)age));
-        drawLayer(ritualThreadLayer, vertices -> drawRitualThreads(entry, vertices, camera, strength, (int)age));
+            drawLayer(outerSphereLayer, vertices ->
+                    drawShaderSphere(entry, vertices, client.world, center, radius, strength)
+            );
+        }
+
+        drawLayer(groundWoundLayer, vertices -> drawGroundWounds(entry, vertices, client.world, strength, markerAge));
+        drawLayer(pillarBodyLayer, vertices -> drawMarkerBodies(entry, vertices, camera, strength, markerAge));
+        drawLayer(pillarCoreLayer, vertices -> drawMarkerCores(entry, vertices, camera, strength, markerAge));
+        drawLayer(pillarPulseLayer, vertices -> drawMarkerPulses(entry, vertices, camera, strength, markerAge));
+        drawLayer(ritualThreadLayer, vertices -> drawRitualThreads(entry, vertices, camera, strength, markerAge));
+
+        matrices.pop();
+    }
+
+    private static void renderVeinmakerLines(WorldRenderContext context, MinecraftClient client) {
+        if (paintedCells.isEmpty()) return;
+
+        MatrixStack matrices = context.matrices();
+        Vec3d camera = client.gameRenderer.getCamera().getPos();
+        matrices.push();
+        matrices.translate(-camera.x, -camera.y, -camera.z);
+
+        MatrixStack.Entry entry = matrices.peek();
+        RenderLayer layer = RenderLayer.getEntityTranslucent(SANGUINE_FIXATIVE_TRAIL_TEXTURE);
+        drawLayer(layer, vertices -> {
+            for (PaintedCell cell : paintedCells) {
+                drawPaintedCell(entry, vertices, cell);
+            }
+        });
 
         matrices.pop();
     }
@@ -411,7 +510,7 @@ public final class BloodSenseClient {
     private static void drawShaderSphere(MatrixStack.Entry entry, VertexConsumer vertices, BlockView world, Vec3d center, float radius, float strength) {
         if (radius <= 0.35f) return;
 
-        int alpha = Math.clamp((int)(62 * strength), 0, 82);
+        int alpha = Math.clamp((int)(38 * strength), 0, 54);
         int latitudeSteps = 12;
         int longitudeSteps = 32;
 
@@ -572,12 +671,13 @@ public final class BloodSenseClient {
     private static void drawMarkerBodies(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, float strength, int scanAge) {
         for (ClientTrace trace : visibleTraces) {
             if (trace.visibility <= 0.01f) continue;
+            if (trace.state == 3) continue;
 
             MarkerStyle style = markerStyle(trace, strength, scanAge);
             double x = trace.pos.getX() + 0.5;
             double y0 = trace.pos.getY() + 0.06;
             double z = trace.pos.getZ() + 0.5;
-            drawPillarBillboardUv(entry, vertices, camera, x, y0, z, style.outerHalf, y0 + style.height, 0.024, bodyVOffset(scanAge, style), style.r, style.g, style.b, style.outerAlpha);
+            drawPillarBillboardUvTopFade(entry, vertices, camera, x, y0, z, style.outerHalf, y0 + style.height, 0.024, bodyVOffset(scanAge, style), style.r, style.g, style.b, style.outerAlpha);
         }
     }
 
@@ -589,7 +689,7 @@ public final class BloodSenseClient {
             double x = trace.pos.getX() + 0.5;
             double y0 = trace.pos.getY() + 0.14;
             double z = trace.pos.getZ() + 0.5;
-            drawPillarBillboardUv(entry, vertices, camera, x, y0, z, style.coreHalf, y0 + style.height, 0.048, coreVOffset(scanAge), style.r, Math.min(90, style.g + 28), Math.min(120, style.b + 32), style.coreAlpha);
+            drawPillarBillboardUvTopFade(entry, vertices, camera, x, y0, z, style.coreHalf, y0 + style.height, 0.048, coreVOffset(scanAge), Math.min(255, style.r + 26), Math.min(255, style.g + 26), Math.min(255, style.b + 26), style.coreAlpha);
         }
     }
 
@@ -616,7 +716,7 @@ public final class BloodSenseClient {
                 double x = trace.pos.getX() + 0.5;
                 double y0 = trace.pos.getY() + 0.018;
                 double z = trace.pos.getZ() + 0.5;
-                drawGroundWound(entry, vertices, x, y0, z, style);
+                drawGroundWound(entry, vertices, trace.pos, x, y0, z, style);
             }
         }
     }
@@ -654,9 +754,9 @@ public final class BloodSenseClient {
         boolean distant = distance > DETAILED_MARKER_DISTANCE;
         float traceStrength = MathHelper.clamp((0.25f + mass * 0.75f) * strength * trace.visibility, 0f, 1.7f);
 
-        int r = ritual ? 255 : rot ? 116 : deep ? 210 : Math.round(MathHelper.lerp(freshness, 128f, 235f));
-        int g = ritual ? 42 : rot ? 20 : deep ? 18 : Math.round(MathHelper.lerp(freshness, 6f, 26f));
-        int b = ritual ? 92 : rot ? 36 : deep ? 118 : Math.round(MathHelper.lerp(freshness, 18f, 44f));
+        int r = ritual ? 255 : rot ? 205 : deep ? 155 : Math.round(MathHelper.lerp(freshness, 126f, 245f));
+        int g = ritual ? 38 : rot ? 76 : deep ? 34 : Math.round(MathHelper.lerp(freshness, 8f, 28f));
+        int b = ritual ? 150 : rot ? 18 : deep ? 235 : Math.round(MathHelper.lerp(freshness, 20f, 50f));
         double height = (ritual ? 3.6 : deep ? 3.2 : rot ? 2.4 : 1.8) + mass * (ritual ? 5.4 : deep ? 5.8 : rot ? 4.2 : 4.8);
         height *= MathHelper.lerp(age, 1.0f, 0.62f);
         double bodyHalf = MathHelper.clamp((float)(height * PILLAR_BODY_TEXTURE_ASPECT * 0.26), distant ? 0.055f : 0.12f, distant ? 0.18f : 0.78f);
@@ -668,7 +768,7 @@ public final class BloodSenseClient {
         float stateAlpha = contained ? 1.18f : drained ? 0.42f : mutated ? 0.78f : 1f;
         int baseAlpha = Math.clamp((int)((ritual ? 150 : deep ? 145 : rot ? 118 : 130) * traceStrength * MathHelper.lerp(age, 1f, 0.68f) * stateAlpha), 34, distant ? 130 : 235);
         int coreAlpha = Math.clamp((int)((ritual ? 215 : deep ? 205 : rot ? 155 : 180) * traceStrength * MathHelper.lerp(age, 1f, 0.72f) * stateAlpha), distant ? 30 : 58, distant ? 145 : 255);
-        float pulseSpeed = drained ? 0.035f : contained ? 0.24f : mutated ? 0.28f : ritual ? 0.19f : deep ? 0.085f : rot ? 0.055f : MathHelper.lerp(freshness, 0.045f, 0.135f);
+        float pulseSpeed = drained ? 0.018f : contained ? 0.13f : mutated ? 0.16f : ritual ? 0.105f : deep ? 0.052f : rot ? 0.032f : MathHelper.lerp(freshness, 0.026f, 0.078f);
 
         return new MarkerStyle(
                 r, g, b,
@@ -680,38 +780,36 @@ public final class BloodSenseClient {
                 pulseSpeed,
                 mass,
                 freshness,
+                contained,
                 distant
         );
     }
 
     private static void drawPulse(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, MarkerStyle style, int scanAge) {
         double travel = ((scanAge * style.pulseSpeed) % 1.0);
-        double bandHeight = Math.max(0.34, style.height * 0.16);
+        double bandHeight = Math.max(0.34, style.height * 0.14);
         double bandBottom = y0 + travel * Math.max(0.1, style.height - bandHeight);
         double bandTop = bandBottom + bandHeight;
         int alpha = Math.clamp((int)(style.coreAlpha * (0.62 + style.freshness * 0.38)), 25, 245);
-        double half = Math.max(0.045, style.coreHalf * 0.48);
+        double half = Math.max(0.055, style.coreHalf * (0.55 + style.mass * 0.3));
 
-        drawPillarBillboard(entry, vertices, camera, x, bandBottom, z, half, bandTop, 0.054, 255, 72, 92, alpha);
+        int r = Math.min(255, style.r + 38);
+        int g = Math.min(255, style.g + 18);
+        int b = Math.min(255, style.b + 22);
+        drawPillarBillboardUvTopFade(entry, vertices, camera, x, bandBottom, z, half, bandTop, 0.054, 0f, r, g, b, alpha);
     }
 
-    private static void drawGroundWound(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y, double z, MarkerStyle style) {
+    private static void drawGroundWound(MatrixStack.Entry entry, VertexConsumer vertices, BlockPos pos, double x, double y, double z, MarkerStyle style) {
         double half = MathHelper.clamp((float)(style.outerHalf * (2.0 + style.mass * 0.9)), 0.38f, 1.55f);
         int alpha = Math.clamp((int)(style.outerAlpha * 1.35), 95, 245);
+        if (style.contained) {
+            alpha = Math.clamp((int)(alpha * 0.22), 18, 72);
+        }
+        double angle = woundRotation(pos);
 
-        addTexturedQuad(entry, vertices,
-                x - half, y, z - half,
-                x + half, y, z - half,
-                x + half, y, z + half,
-                x - half, y, z + half,
-                255, 42, 58, alpha);
+        addRotatedGroundQuad(entry, vertices, x, y, z, half, angle, style.r, style.g, style.b, alpha);
         double glowHalf = half * 1.32;
-        addTexturedQuad(entry, vertices,
-                x - glowHalf, y + 0.003, z - glowHalf,
-                x + glowHalf, y + 0.003, z - glowHalf,
-                x + glowHalf, y + 0.003, z + glowHalf,
-                x - glowHalf, y + 0.003, z + glowHalf,
-                255, 18, 34, Math.clamp((int)(alpha * 0.42), 35, 120));
+        addRotatedGroundQuad(entry, vertices, x, y + 0.003, z, glowHalf, angle + 0.37, Math.min(255, style.r + 18), Math.min(255, style.g + 10), Math.min(255, style.b + 10), Math.clamp((int)(alpha * 0.42), 8, 120));
     }
 
     private static void drawRitualSpiral(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, MarkerStyle style, int scanAge) {
@@ -727,6 +825,9 @@ public final class BloodSenseClient {
             double half = Math.max(0.04, style.coreHalf * (0.24 - strand * 0.018));
 
             for (int i = 0; i < segments; i++) {
+                float heightT = i / (float)segments;
+                float topFade = topFadeAlpha(heightT);
+                if (topFade <= 0.01f) continue;
                 double yA = y0 + i * heightStep + 0.08;
                 double yB = yA + heightStep * 0.62;
                 double a0 = spin + phase + i * 0.58;
@@ -741,7 +842,7 @@ public final class BloodSenseClient {
                         z + Math.sin(a1) * strandRadius,
                         half,
                         offset + strand * 0.012,
-                        255, 82, 105, alpha);
+                        Math.min(255, style.r + 42), Math.min(255, style.g + 34), Math.min(255, style.b + 34), Math.clamp((int)(alpha * topFade), 0, 190));
             }
         }
     }
@@ -752,6 +853,18 @@ public final class BloodSenseClient {
 
     private static float coreVOffset(int scanAge) {
         return -((scanAge * 0.006f) % 1f);
+    }
+
+    private static float topFadeAlpha(float heightT) {
+        return 1f - smooth(MathHelper.clamp((heightT - 0.7f) / 0.3f, 0f, 1f));
+    }
+
+    private static double woundRotation(BlockPos pos) {
+        long hash = pos.asLong() * 0x9E3779B97F4A7C15L + 0x632BE59BD9B4E019L;
+        hash ^= hash >>> 33;
+        hash *= 0xff51afd7ed558ccdL;
+        hash ^= hash >>> 33;
+        return ((hash & 0xffffL) / 65535.0) * Math.PI * 2.0;
     }
 
     private static float smooth(float value) {
@@ -773,7 +886,7 @@ public final class BloodSenseClient {
     private static void updateTraceVisibility(ClientTrace trace, float distance, float radius, int scanAge) {
         float edge = MathHelper.clamp((radius - distance + TRACE_EDGE_FADE_BLOCKS) / TRACE_EDGE_FADE_BLOCKS, 0f, 1f);
         float entryFade = smooth(edge);
-        float durationFade = currentStrength(0f);
+        float durationFade = trace.state == 3 ? 1f : currentStrength(0f);
 
         int clientAge = trace.ageTicks + scanAge;
         float expiryFade = 1f;
@@ -819,13 +932,26 @@ public final class BloodSenseClient {
     }
 
     private static void drawPillarBillboardUv(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double half, double y1, double forwardOffset, float vOffset, int r, int g, int b, int a) {
-        double dx = camera.x - x;
-        double dz = camera.z - z;
-        double length = Math.sqrt(dx * dx + dz * dz);
-        double rightX = length > 0.0001 ? dz / length : 1.0;
-        double rightZ = length > 0.0001 ? -dx / length : 0.0;
-        double forwardX = length > 0.0001 ? dx / length : 0.0;
-        double forwardZ = length > 0.0001 ? dz / length : 1.0;
+        drawPillarBillboardUvGradient(entry, vertices, camera, x, y0, z, half, y1, forwardOffset, vOffset, r, g, b, a, a);
+    }
+
+    private static void drawPillarBillboardUvTopFade(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double half, double y1, double forwardOffset, float vOffset, int r, int g, int b, int alpha) {
+        double splitY = y0 + (y1 - y0) * 0.7;
+        float splitV = vOffset + 0.3f;
+        drawPillarBillboardUvGradient(entry, vertices, camera, x, y0, z, half, splitY, forwardOffset, vOffset + 1f, vOffset + 1f, splitV, splitV, r, g, b, alpha, alpha);
+        drawPillarBillboardUvGradient(entry, vertices, camera, x, splitY, z, half, y1, forwardOffset, splitV, splitV, vOffset, vOffset, r, g, b, alpha, 0);
+    }
+
+    private static void drawPillarBillboardUvGradient(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double half, double y1, double forwardOffset, float vOffset, int r, int g, int b, int bottomAlpha, int topAlpha) {
+        drawPillarBillboardUvGradient(entry, vertices, camera, x, y0, z, half, y1, forwardOffset, 1f + vOffset, 1f + vOffset, vOffset, vOffset, r, g, b, bottomAlpha, topAlpha);
+    }
+
+    private static void drawPillarBillboardUvGradient(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double half, double y1, double forwardOffset, float vBottomLeft, float vBottomRight, float vTopRight, float vTopLeft, int r, int g, int b, int bottomAlpha, int topAlpha) {
+        AxisLockedBillboard billboard = axisLockedBillboard(camera, x, z);
+        double rightX = billboard.rightX;
+        double rightZ = billboard.rightZ;
+        double forwardX = billboard.forwardX;
+        double forwardZ = billboard.forwardZ;
         double px = x + forwardX * forwardOffset;
         double pz = z + forwardZ * forwardOffset;
 
@@ -834,21 +960,41 @@ public final class BloodSenseClient {
                 px + rightX * half, y0, pz + rightZ * half,
                 px + rightX * half, y1, pz + rightZ * half,
                 px - rightX * half, y1, pz - rightZ * half,
-                0f, 1f + vOffset,
-                1f, 1f + vOffset,
-                1f, vOffset,
-                0f, vOffset,
-                r, g, b, a);
+                0f, vBottomLeft,
+                1f, vBottomRight,
+                1f, vTopRight,
+                0f, vTopLeft,
+                r, g, b,
+                bottomAlpha, bottomAlpha, topAlpha, topAlpha);
     }
 
-    private static void drawTaperedPillarBillboard(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double bottomHalf, double topHalf, double y1, double forwardOffset, float vOffset, int r, int g, int b, int a) {
+    private static AxisLockedBillboard axisLockedBillboard(Vec3d camera, double x, double z) {
+        Vector3f cameraRight = new Vector3f(1f, 0f, 0f)
+                .rotate(MinecraftClient.getInstance().gameRenderer.getCamera().getRotation());
+        double rightX = cameraRight.x();
+        double rightZ = cameraRight.z();
+        double rightLength = Math.sqrt(rightX * rightX + rightZ * rightZ);
+        if (rightLength > 0.0001) {
+            rightX /= rightLength;
+            rightZ /= rightLength;
+        } else {
+            rightX = 1.0;
+            rightZ = 0.0;
+        }
         double dx = camera.x - x;
         double dz = camera.z - z;
         double length = Math.sqrt(dx * dx + dz * dz);
-        double rightX = length > 0.0001 ? dz / length : 1.0;
-        double rightZ = length > 0.0001 ? -dx / length : 0.0;
         double forwardX = length > 0.0001 ? dx / length : 0.0;
         double forwardZ = length > 0.0001 ? dz / length : 1.0;
+        return new AxisLockedBillboard(rightX, rightZ, forwardX, forwardZ);
+    }
+
+    private static void drawTaperedPillarBillboard(MatrixStack.Entry entry, VertexConsumer vertices, Vec3d camera, double x, double y0, double z, double bottomHalf, double topHalf, double y1, double forwardOffset, float vOffset, int r, int g, int b, int a) {
+        AxisLockedBillboard billboard = axisLockedBillboard(camera, x, z);
+        double rightX = billboard.rightX;
+        double rightZ = billboard.rightZ;
+        double forwardX = billboard.forwardX;
+        double forwardZ = billboard.forwardZ;
         double px = x + forwardX * forwardOffset;
         double pz = z + forwardZ * forwardOffset;
 
@@ -885,8 +1031,114 @@ public final class BloodSenseClient {
                 r, g, b, a);
     }
 
+    private static void drawPaintedCell(MatrixStack.Entry entry, VertexConsumer vertices, PaintedCell cell) {
+        Direction side = Direction.values()[Math.floorMod(cell.side, Direction.values().length)];
+        if (!hasOpenPaintedSurface(cell.pos, side)) return;
+
+        CellQuad quad = cellQuad(cell.pos, side, cell.pixelX, cell.pixelY);
+        int shade = (cell.pixelX * 19 + cell.pixelY * 11 + cell.pos.getX() * 3 + cell.pos.getZ() * 5) & 15;
+        int red = 132 + shade;
+        int green = 4 + shade / 4;
+        int blue = 18 + shade / 2;
+
+        float u0 = cell.pixelX / 16f;
+        float v0 = cell.pixelY / 16f;
+        float u1 = u0 + 1f / 16f;
+        float v1 = v0 + 1f / 16f;
+        int alpha = Math.clamp((int)(208 * MathHelper.clamp(cell.life / 40f, 0f, 1f)), 0, 208);
+
+        addTexturedQuadUv(entry, vertices,
+                quad.a.x, quad.a.y, quad.a.z,
+                quad.b.x, quad.b.y, quad.b.z,
+                quad.c.x, quad.c.y, quad.c.z,
+                quad.d.x, quad.d.y, quad.d.z,
+                u0, v0,
+                u1, v0,
+                u1, v1,
+                u0, v1,
+                red, green, blue, alpha);
+    }
+
+    private static boolean hasOpenPaintedSurface(BlockPos pos, Direction side) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client.world == null) return false;
+
+        return !client.world.getBlockState(pos).isAir()
+                && client.world.getBlockState(pos.offset(side)).isAir();
+    }
+
+    private static CellQuad cellQuad(BlockPos pos, Direction side, int pixelX, int pixelY) {
+        double min = 0.0;
+        double max = 1.0 / 16.0;
+        double u0 = pixelX / 16.0;
+        double u1 = u0 + max;
+        double v0 = pixelY / 16.0;
+        double v1 = v0 + max;
+        double lift = 0.013;
+        double x = pos.getX();
+        double y = pos.getY();
+        double z = pos.getZ();
+
+        return switch (side) {
+            case UP -> new CellQuad(
+                    new Vec3d(x + u0, y + 1.0 + lift, z + v0),
+                    new Vec3d(x + u1, y + 1.0 + lift, z + v0),
+                    new Vec3d(x + u1, y + 1.0 + lift, z + v1),
+                    new Vec3d(x + u0, y + 1.0 + lift, z + v1)
+            );
+            case DOWN -> new CellQuad(
+                    new Vec3d(x + u0, y - lift, z + v1),
+                    new Vec3d(x + u1, y - lift, z + v1),
+                    new Vec3d(x + u1, y - lift, z + v0),
+                    new Vec3d(x + u0, y - lift, z + v0)
+            );
+            case NORTH -> new CellQuad(
+                    new Vec3d(x + u1, y + 1.0 - v0, z - lift),
+                    new Vec3d(x + u0, y + 1.0 - v0, z - lift),
+                    new Vec3d(x + u0, y + 1.0 - v1, z - lift),
+                    new Vec3d(x + u1, y + 1.0 - v1, z - lift)
+            );
+            case SOUTH -> new CellQuad(
+                    new Vec3d(x + u0, y + 1.0 - v0, z + 1.0 + lift),
+                    new Vec3d(x + u1, y + 1.0 - v0, z + 1.0 + lift),
+                    new Vec3d(x + u1, y + 1.0 - v1, z + 1.0 + lift),
+                    new Vec3d(x + u0, y + 1.0 - v1, z + 1.0 + lift)
+            );
+            case EAST -> new CellQuad(
+                    new Vec3d(x + 1.0 + lift, y + 1.0 - v0, z + u1),
+                    new Vec3d(x + 1.0 + lift, y + 1.0 - v0, z + u0),
+                    new Vec3d(x + 1.0 + lift, y + 1.0 - v1, z + u0),
+                    new Vec3d(x + 1.0 + lift, y + 1.0 - v1, z + u1)
+            );
+            case WEST -> new CellQuad(
+                    new Vec3d(x - lift, y + 1.0 - v0, z + u0),
+                    new Vec3d(x - lift, y + 1.0 - v0, z + u1),
+                    new Vec3d(x - lift, y + 1.0 - v1, z + u1),
+                    new Vec3d(x - lift, y + 1.0 - v1, z + u0)
+            );
+        };
+    }
+
     private static void addTexturedQuad(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, int r, int g, int b, int a) {
         addTexturedQuadUv(entry, vertices, x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4, 0f, 1f, 1f, 1f, 1f, 0f, 0f, 0f, r, g, b, a);
+    }
+
+    private static void addRotatedGroundQuad(MatrixStack.Entry entry, VertexConsumer vertices, double x, double y, double z, double half, double angle, int r, int g, int b, int a) {
+        double cos = Math.cos(angle);
+        double sin = Math.sin(angle);
+        Vec3d p1 = rotatedGroundCorner(x, y, z, -half, -half, cos, sin);
+        Vec3d p2 = rotatedGroundCorner(x, y, z, half, -half, cos, sin);
+        Vec3d p3 = rotatedGroundCorner(x, y, z, half, half, cos, sin);
+        Vec3d p4 = rotatedGroundCorner(x, y, z, -half, half, cos, sin);
+        addTexturedQuad(entry, vertices, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z, p4.x, p4.y, p4.z, r, g, b, a);
+    }
+
+    private static Vec3d rotatedGroundCorner(double x, double y, double z, double dx, double dz, double cos, double sin) {
+        return new Vec3d(
+                x + dx * cos - dz * sin,
+                y,
+                z + dx * sin + dz * cos
+        );
     }
 
     private static void addTexturedQuadUv(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, float u1, float v1, float u2, float v2, float u3, float v3, float u4, float v4, int r, int g, int b, int a) {
@@ -894,6 +1146,13 @@ public final class BloodSenseClient {
         vertices.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a).texture(u2, v2).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
         vertices.vertex(entry, (float)x3, (float)y3, (float)z3).color(r, g, b, a).texture(u3, v3).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
         vertices.vertex(entry, (float)x4, (float)y4, (float)z4).color(r, g, b, a).texture(u4, v4).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+    }
+
+    private static void addTexturedQuadUv(MatrixStack.Entry entry, VertexConsumer vertices, double x1, double y1, double z1, double x2, double y2, double z2, double x3, double y3, double z3, double x4, double y4, double z4, float u1, float v1, float u2, float v2, float u3, float v3, float u4, float v4, int r, int g, int b, int a1, int a2, int a3, int a4) {
+        vertices.vertex(entry, (float)x1, (float)y1, (float)z1).color(r, g, b, a1).texture(u1, v1).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x2, (float)y2, (float)z2).color(r, g, b, a2).texture(u2, v2).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x3, (float)y3, (float)z3).color(r, g, b, a3).texture(u3, v3).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
+        vertices.vertex(entry, (float)x4, (float)y4, (float)z4).color(r, g, b, a4).texture(u4, v4).overlay(OverlayTexture.DEFAULT_UV).light(LightmapTextureManager.MAX_LIGHT_COORDINATE).normal(entry, 0f, 1f, 0f);
     }
 
     private static final class ClientTrace {
@@ -924,6 +1183,35 @@ public final class BloodSenseClient {
     private record ScreenBubble(float x, float y, float radius) {
     }
 
+    private record AxisLockedBillboard(double rightX, double rightZ, double forwardX, double forwardZ) {
+    }
+
+    private static final class PaintedCell {
+        private final BlockPos pos;
+        private final int side;
+        private final int pixelX;
+        private final int pixelY;
+        private int life;
+
+        private PaintedCell(BlockPos pos, int side, int pixelX, int pixelY, int life) {
+            this.pos = pos;
+            this.side = side;
+            this.pixelX = pixelX;
+            this.pixelY = pixelY;
+            this.life = life;
+        }
+
+        private boolean samePixel(PaintedCell other) {
+            return side == other.side
+                    && pixelX == other.pixelX
+                    && pixelY == other.pixelY
+                    && pos.equals(other.pos);
+        }
+    }
+
+    private record CellQuad(Vec3d a, Vec3d b, Vec3d c, Vec3d d) {
+    }
+
     private record MarkerStyle(
             int r,
             int g,
@@ -936,6 +1224,7 @@ public final class BloodSenseClient {
             float pulseSpeed,
             float mass,
             float freshness,
+            boolean contained,
             boolean distant
     ) {
     }

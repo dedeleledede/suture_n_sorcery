@@ -10,12 +10,15 @@ import net.minecraft.util.Identifier;
 import java.util.ArrayList;
 import java.util.List;
 
-public record BloodSenseResponsePayload(List<Trace> traces) implements CustomPayload {
+public record BloodSenseResponsePayload(List<Trace> traces, boolean refreshOnly) implements CustomPayload {
     public static final CustomPayload.Id<BloodSenseResponsePayload> ID =
             new CustomPayload.Id<>(Identifier.of(Suture_n_sorcery.MOD_ID, "blood_sense_response"));
 
-    public static final PacketCodec<RegistryByteBuf, BloodSenseResponsePayload> CODEC =
-            Trace.CODEC.collect(PacketCodecs.toList(96)).xmap(BloodSenseResponsePayload::new, BloodSenseResponsePayload::traces);
+    public static final PacketCodec<RegistryByteBuf, BloodSenseResponsePayload> CODEC = PacketCodec.tuple(
+            Trace.CODEC.collect(PacketCodecs.toList(96)), BloodSenseResponsePayload::traces,
+            PacketCodecs.BOOLEAN, BloodSenseResponsePayload::refreshOnly,
+            BloodSenseResponsePayload::new
+    );
 
     public BloodSenseResponsePayload {
         traces = List.copyOf(traces);

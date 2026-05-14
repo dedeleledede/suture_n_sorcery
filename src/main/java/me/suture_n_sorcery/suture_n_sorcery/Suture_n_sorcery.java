@@ -12,6 +12,7 @@ import me.suture_n_sorcery.suture_n_sorcery.registries.ModItems;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModParticles;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModScreenHandlers;
 import me.suture_n_sorcery.suture_n_sorcery.registries.ModSounds;
+import me.suture_n_sorcery.suture_n_sorcery.veinmaker.VeinmakerTrailTracker;
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ public class Suture_n_sorcery implements ModInitializer {
         RitualLoomRitualHandler.registerRitualLoomRituals();
         ModSounds.registerSounds();
         BloodSenseTracker.registerBloodSenseEvents();
+        VeinmakerTrailTracker.registerTrailEvents();
         ModDebugCommands.registerDebugCommands();
     }
 }

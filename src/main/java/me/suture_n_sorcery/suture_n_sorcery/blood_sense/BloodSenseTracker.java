@@ -229,6 +229,52 @@ public final class BloodSenseTracker {
                 .toList();
     }
 
+    public static boolean hasActiveTraceNear(ServerWorld world, BlockPos center, int radius) {
+        prune(world);
+
+        long radiusSquared = (long) radius * radius;
+        return state(world).traces().stream()
+                .anyMatch(trace -> trace.state() != STATE_DRAINED
+                        && trace.state() != STATE_MUTATED
+                        && trace.pos().getSquaredDistance(center) <= radiusSquared);
+    }
+
+    public static boolean hasContainedTraceNear(ServerWorld world, BlockPos center, int radius) {
+        prune(world);
+
+        long radiusSquared = (long) radius * radius;
+        return state(world).traces().stream()
+                .anyMatch(trace -> trace.state() == STATE_CONTAINED
+                        && trace.pos().getSquaredDistance(center) <= radiusSquared);
+    }
+
+    public static boolean releaseContainedNear(ServerWorld world, BlockPos center, int radius) {
+        BloodSenseWorldState state = state(world);
+        List<BloodSenseWorldState.StoredTrace> traces = state.traces();
+        long radiusSquared = (long) radius * radius;
+        boolean released = false;
+
+        for (int i = 0; i < traces.size(); i++) {
+            BloodSenseWorldState.StoredTrace trace = traces.get(i);
+            if (trace.state() != STATE_CONTAINED) continue;
+            if (trace.pos().getSquaredDistance(center) > radiusSquared) continue;
+
+            traces.set(i, new BloodSenseWorldState.StoredTrace(
+                    trace.type(),
+                    trace.pos(),
+                    trace.createdTime(),
+                    trace.strength(),
+                    STATE_HIDDEN
+            ));
+            released = true;
+        }
+
+        if (released) {
+            state.markDirty();
+        }
+        return released;
+    }
+
     private static void record(ServerWorld world, BloodSenseTraceType type, BlockPos pos, int strength) {
         prune(world);
 

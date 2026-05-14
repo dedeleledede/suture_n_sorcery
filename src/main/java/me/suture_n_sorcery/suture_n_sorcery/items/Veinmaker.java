@@ -4,7 +4,8 @@ import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTracker;
 import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTrace;
 import me.suture_n_sorcery.suture_n_sorcery.blood_sense.BloodSenseTraceType;
 import me.suture_n_sorcery.suture_n_sorcery.Suture_n_sorcery;
-import me.suture_n_sorcery.suture_n_sorcery.registries.ModParticles;
+import me.suture_n_sorcery.suture_n_sorcery.network.ModNetworking;
+import me.suture_n_sorcery.suture_n_sorcery.veinmaker.VeinmakerTrailTracker;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.component.type.TooltipDisplayComponent;
@@ -14,7 +15,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.ItemUsageContext;
 import net.minecraft.item.tooltip.TooltipType;
-import net.minecraft.nbt.NbtCompound;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import net.minecraft.util.ActionResult;
@@ -40,7 +41,6 @@ public final class Veinmaker extends Item {
     private static final int MAX_LINE_POINTS = 80;
     private static final int MAX_FIXATIVE_CHARGES = 8;
     private static final int CHARGES_PER_FIXATIVE = 4;
-    private static final double LINE_THICKNESS = 3.0 / 16.0;
     private static final String FIXATIVE_CHARGES_KEY = "suture_n_sorcery_fixative_charges";
     private static final Identifier EMPTY_MODEL = Identifier.of(Suture_n_sorcery.MOD_ID, "veinmaker_empty");
     private static final Identifier LOADED_MODEL = Identifier.of(Suture_n_sorcery.MOD_ID, "veinmaker");
@@ -66,11 +66,6 @@ public final class Veinmaker extends Item {
             return ActionResult.FAIL;
         }
 
-        if (!BloodSenseTracker.isBloodSenseActive(world, player.getUuid())) {
-            player.sendMessage(Text.literal("blood sense must be active"), true);
-            return ActionResult.FAIL;
-        }
-
         ItemStack offering = player.getStackInHand(Hand.OFF_HAND);
         if (isValidOffering(offering, context.getStack())) {
             if (!hasFixativeForAction(player, context.getStack())) return ActionResult.FAIL;
@@ -90,6 +85,7 @@ public final class Veinmaker extends Item {
             if (!player.isCreative()) {
                 offering.decrement(1);
             }
+            syncBloodSense(player);
             player.sendMessage(Text.literal("the blood wound takes the offering"), true);
             return ActionResult.SUCCESS;
         }
@@ -108,6 +104,7 @@ public final class Veinmaker extends Item {
             if (!player.giveItemStack(output)) {
                 player.dropItem(output, false);
             }
+            syncBloodSense(player);
             player.sendMessage(Text.literal("the veinmaker draws blood memory"), true);
             return ActionResult.SUCCESS;
         }
@@ -119,6 +116,7 @@ public final class Veinmaker extends Item {
         }
 
         consumeFixative(context.getStack());
+        syncBloodSense(player);
         player.sendMessage(Text.literal("blood wound contained"), true);
         return ActionResult.SUCCESS;
     }
@@ -143,9 +141,8 @@ public final class Veinmaker extends Item {
 
         BlockPos pos = hit.getBlockPos().toImmutable();
         Vec3d hitPos = hit.getPos();
-        Vec3d previous = line.lastHit();
-        line.sample(pos, hitPos);
-        drawWetLine(serverWorld, previous, hitPos);
+        List<me.suture_n_sorcery.suture_n_sorcery.veinmaker.VeinmakerTrailWorldState.PaintedCell> painted = line.paint(serverWorld, pos, hitPos, hit.getSide());
+        syncTrailPixels(player, painted);
     }
 
     @Override
@@ -160,6 +157,10 @@ public final class Veinmaker extends Item {
         BloodSenseTracker.ContainmentResult result = BloodSenseTracker.containLoop(serverWorld, player, line.points());
         if (result == BloodSenseTracker.ContainmentResult.CONTAINED) {
             consumeFixative(stack);
+            syncBloodSense(player);
+            if (player instanceof ServerPlayerEntity serverPlayer) {
+                ModNetworking.sendVeinmakerTrails(serverPlayer);
+            }
             player.sendMessage(Text.literal("blood wound contained"), true);
             return true;
         }
@@ -187,17 +188,12 @@ public final class Veinmaker extends Item {
             return ActionResult.FAIL;
         }
 
-        if (!BloodSenseTracker.isBloodSenseActive(world, player.getUuid())) {
-            player.sendMessage(Text.literal("blood sense must be active"), true);
-            return ActionResult.FAIL;
-        }
-
         if (!hasFixativeForAction(player, stack)) return ActionResult.FAIL;
 
-        DrawnLine line = new DrawnLine();
+        DrawnLine line = new DrawnLine(nextGroupId(world, player));
         BlockHitResult hit = tracedSurface(player);
         if (hit != null) {
-            line.sample(hit.getBlockPos().toImmutable(), hit.getPos());
+            line.seed(hit.getBlockPos().toImmutable(), hit.getPos(), hit.getSide());
         }
         ACTIVE_LINES.put(player.getUuid(), line);
         player.setCurrentHand(hand);
@@ -245,6 +241,11 @@ public final class Veinmaker extends Item {
                 && !offering.isOf(BloodSenseTools.SANGUINE_FIXATIVE);
     }
 
+    private static int nextGroupId(ServerWorld world, PlayerEntity player) {
+        int id = (int)(world.getTime() ^ player.getUuid().getMostSignificantBits() ^ player.getUuid().getLeastSignificantBits());
+        return id == 0 ? 1 : id;
+    }
+
     private static ItemStack outputFor(BloodSenseTrace trace) {
         int count = switch (trace.type()) {
             case RITUAL -> 2;
@@ -285,34 +286,53 @@ public final class Veinmaker extends Item {
         stack.set(DataComponentTypes.ITEM_MODEL, clamped > 0 ? LOADED_MODEL : EMPTY_MODEL);
     }
 
-    private static void drawWetLine(ServerWorld world, Vec3d from, Vec3d to) {
-        if (from == null) {
-            world.spawnParticles(ModParticles.BLOOD_SPLAT, to.x, to.y + 0.025, to.z, 5, LINE_THICKNESS * 0.35, 0.0, LINE_THICKNESS * 0.35, 0.0);
-            return;
-        }
+    private static void syncTrailPixels(PlayerEntity player, List<me.suture_n_sorcery.suture_n_sorcery.veinmaker.VeinmakerTrailWorldState.PaintedCell> painted) {
+        if (!(player instanceof ServerPlayerEntity serverPlayer)) return;
+        ModNetworking.sendVeinmakerTrailCells(serverPlayer, painted, false);
+    }
 
-        Vec3d delta = to.subtract(from);
-        double length = delta.length();
-        int steps = Math.max(2, (int)Math.ceil(length / 0.08));
-        for (int i = 0; i <= steps; i++) {
-            Vec3d point = from.lerp(to, i / (double)steps);
-            world.spawnParticles(ModParticles.BLOOD_SPLAT, point.x, point.y + 0.025, point.z, 3, LINE_THICKNESS * 0.5, 0.0, LINE_THICKNESS * 0.5, 0.0);
+    private static void syncBloodSense(PlayerEntity player) {
+        if (player instanceof ServerPlayerEntity serverPlayer) {
+            ModNetworking.sendBloodSenseUpdate(serverPlayer, false);
         }
     }
 
     private static final class DrawnLine {
         private final List<BlockPos> points = new ArrayList<>();
+        private final int groupId;
+        private BlockPos lastPos;
         private Vec3d lastHit;
+        private net.minecraft.util.math.Direction lastSide;
 
-        private void sample(BlockPos pos, Vec3d hitPos) {
+        private DrawnLine(int groupId) {
+            this.groupId = groupId;
+        }
+
+        private void seed(BlockPos pos, Vec3d hitPos, net.minecraft.util.math.Direction side) {
+            samplePoint(pos);
+            lastPos = pos;
+            lastHit = hitPos;
+            lastSide = side;
+        }
+
+        private List<me.suture_n_sorcery.suture_n_sorcery.veinmaker.VeinmakerTrailWorldState.PaintedCell> paint(ServerWorld world, BlockPos pos, Vec3d hitPos, net.minecraft.util.math.Direction side) {
+            samplePoint(pos);
+            List<me.suture_n_sorcery.suture_n_sorcery.veinmaker.VeinmakerTrailWorldState.PaintedCell> painted;
+            if (lastPos != null && lastHit != null && side == lastSide) {
+                painted = VeinmakerTrailTracker.paintLine(world, lastPos, lastHit, pos, hitPos, side, groupId);
+            } else {
+                painted = VeinmakerTrailTracker.paint(world, pos, side, hitPos, groupId);
+            }
+            lastPos = pos;
+            lastHit = hitPos;
+            lastSide = side;
+            return painted;
+        }
+
+        private void samplePoint(BlockPos pos) {
             if (points.size() < MAX_LINE_POINTS && (points.isEmpty() || points.getLast().getSquaredDistance(pos) >= 0.85)) {
                 points.add(pos);
             }
-            lastHit = hitPos;
-        }
-
-        private Vec3d lastHit() {
-            return lastHit;
         }
 
         private List<BlockPos> points() {
